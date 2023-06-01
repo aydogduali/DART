@@ -2,12 +2,11 @@
 ! by UCAR, "as is", without charge, subject to all terms of use at
 ! http://www.image.ucar.edu/DAReS/DART/DART_download
 !
-! $Id$
 
 ! Fortran has a limit of 32 characters for variable names. Hence,
 ! each column can be at most 32 characters wide.
 ! xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
-! BEGIN DART PREPROCESS KIND LIST
+! BEGIN DART PREPROCESS TYPE DEFINITIONS
 ! SAT_TEMPERATURE,                 QTY_TEMPERATURE,                COMMON_CODE
 ! SAT_TEMPERATURE_ELECTRON,        QTY_TEMPERATURE_ELECTRON,       COMMON_CODE
 ! SAT_TEMPERATURE_ION,             QTY_TEMPERATURE_ION,            COMMON_CODE
@@ -49,17 +48,16 @@
 ! COSMIC_ELECTRON_DENSITY,         QTY_ELECTRON_DENSITY
 ! GND_GPS_VTEC,		           QTY_GND_GPS_VTEC
 ! CHAMP_DENSITY,                   QTY_DENSITY
-! MIDAS_TEC,                       QTY_VERTICAL_TEC
+! MIDAS_TEC,                       QTY_VERTICAL_TEC,               COMMON_CODE
 ! SSUSI_O_N2_RATIO,                QTY_O_N2_COLUMN_DENSITY_RATIO
 ! GPS_VTEC_EXTRAP,                 QTY_VERTICAL_TEC,               COMMON_CODE
 ! SABER_TEMPERATURE,               QTY_TEMPERATURE,                COMMON_CODE
 ! AURAMLS_TEMPERATURE,             QTY_TEMPERATURE,                COMMON_CODE
-! END DART PREPROCESS KIND LIST
+! END DART PREPROCESS TYPE DEFINITIONS
 
 ! BEGIN DART PREPROCESS USE OF SPECIAL OBS_DEF MODULE
 !  use obs_def_upper_atm_mod, only : get_expected_upper_atm_density
 !  use obs_def_upper_atm_mod, only : get_expected_gnd_gps_vtec
-!  use obs_def_upper_atm_mod, only : get_expected_vtec
 !  use obs_def_upper_atm_mod, only : get_expected_O_N2_ratio
 !  use obs_def_upper_atm_mod, only : get_expected_electron_density
 ! END DART PREPROCESS USE OF SPECIAL OBS_DEF MODULE
@@ -69,8 +67,6 @@
 !      call get_expected_upper_atm_density(state_handle, ens_size, location, expected_obs, istatus)
 ! case(CHAMP_DENSITY) 
 !      call get_expected_upper_atm_density(state_handle, ens_size, location, expected_obs, istatus)
-! case(MIDAS_TEC) 
-!      call get_expected_vtec(state_handle, ens_size, location, expected_obs, istatus)
 ! case(GND_GPS_VTEC)
 !      call get_expected_gnd_gps_vtec(state_handle, ens_size, location, expected_obs, istatus)
 ! case(SSUSI_O_N2_RATIO)
@@ -83,8 +79,6 @@
 ! case(SAT_RHO) 
 !      continue
 ! case(CHAMP_DENSITY) 
-!      continue
-! case(MIDAS_TEC) 
 !      continue
 ! case(GND_GPS_VTEC)
 !      continue
@@ -99,8 +93,6 @@
 !      continue
 ! case(CHAMP_DENSITY) 
 !      continue
-! case(MIDAS_TEC) 
-!      continue
 ! case(GND_GPS_VTEC)
 !      continue
 ! case(SSUSI_O_N2_RATIO)
@@ -113,8 +105,6 @@
 ! case(SAT_RHO) 
 !      continue
 ! case(CHAMP_DENSITY) 
-!      continue
-! case(MIDAS_TEC) 
 !      continue
 ! case(GND_GPS_VTEC)
 !      continue
@@ -152,7 +142,6 @@ implicit none
 private
 public :: get_expected_upper_atm_density, &
           get_expected_gnd_gps_vtec, &
-          get_expected_vtec, &
           get_expected_O_N2_ratio, &
           get_expected_electron_density
 
@@ -280,6 +269,7 @@ real(r8) :: loc_vals(3)
 real(r8) :: tec(ens_size)
 type(location_type) :: probe
 logical  :: return_now
+integer  :: i
 
 if ( .not. module_initialized ) call initialize_module
 
@@ -288,11 +278,12 @@ istatus = 0     ! must be 0 to use track_status()
 loc_vals = get_location(location)
 
 nAlts = 0
-LEVELS: do iAlt=1, size(ALT)+1
+LEVELS: do iAlt=1, size(ALT,2)+1
    ! loop over levels.  if we get to one more than the allocated array size,
    ! this model must have more levels than we expected.  increase array sizes,
    ! recompile, and try again.
-   if (iAlt > size(ALT)) then
+
+   if (iAlt > size(ALT,2)) then
       write(string1,'(''more than '',i4,'' levels in the model.'')') MAXLEVELS
       string2='increase MAXLEVELS in obs_def_upper_atm_mod.f90, rerun preprocess and recompile.'
       call error_handler(E_ERR, 'get_expected_gnd_gps_vtec', string1, &
@@ -308,8 +299,10 @@ LEVELS: do iAlt=1, size(ALT)+1
    call track_status(ens_size, this_istatus, obs_val, istatus, return_now)
    if (any(istatus /= 0)) exit LEVELS
 
-   call interpolate(state_handle, ens_size, probe, QTY_GEOPOTENTIAL_HEIGHT, ALT(:, iAlt), this_istatus) 
+   call interpolate(state_handle, ens_size, probe, QTY_GEOMETRIC_HEIGHT, ALT(:, iAlt), this_istatus) 
+
    call track_status(ens_size, this_istatus, obs_val, istatus, return_now)
+ 
    if (any(istatus /= 0)) exit LEVELS
    
    nAlts = nAlts+1
@@ -321,8 +314,16 @@ if (nAlts == 0) then
    return
 endif
 
-! clear the error from the last level and start again?
 istatus(:) = 0
+
+do i=1,ens_size
+   if (any(IDensityS_ie(i,1:nAlts) == MISSING_R8) .or. any(ALT(i,1:nAlts) == MISSING_R8)) then
+      ! mark the ensemble member as having failed
+      istatus(i) = 1
+   end if
+end do
+
+! clear the error from the last level and start again?
 tec=0.0_r8 !start with zero for the summation
 
 do iAlt = 1, nAlts-1 !approximate the integral over the altitude as a sum of trapezoids
@@ -330,36 +331,14 @@ do iAlt = 1, nAlts-1 !approximate the integral over the altitude as a sum of tra
    where (istatus == 0) &
       tec = tec + ( ALT(:, iAlt+1)-ALT(:, iAlt) )  * ( IDensityS_ie(:, iAlt+1)+IDensityS_ie(:, iAlt) ) /2.0_r8
 enddo
-where (istatus == 0) &
-   obs_val = tec * 10.0**(-16) !units of TEC are "10^16" #electron/m^2 instead of just "1" #electron/m^2
 
+where (istatus == 0) 
+   obs_val = tec * 10.0**(-16) !units of TEC are "10^16" #electron/m^2 instead of just "1" #electron/m^2
+elsewhere 
+   obs_val = MISSING_R8
+end where
 
 end subroutine get_expected_gnd_gps_vtec
-
-!-----------------------------------------------------------------------------
-
-! Given DART state vector and a location, 
-! it computes thermospheric neutral density [Kg/m3] 
-! The istatus variable should be returned as 0 unless there is a problem
-
-subroutine get_expected_vtec(state_handle, ens_size, location, expected_obs, istatus)
-
-type(ensemble_type), intent(in) :: state_handle
-integer,             intent(in) :: ens_size
-type(location_type), intent(in) :: location
-real(r8),           intent(out) :: expected_obs(ens_size)
-integer,            intent(out) :: istatus(ens_size)
-
-
-if ( .not. module_initialized ) call initialize_module
-
-call error_handler(E_ERR, 'get_expected_vtec', 'routine needs to be written', &
-           source, revision, revdate)
-
-expected_obs = missing_r8
-istatus = 1
-
-end subroutine get_expected_vtec
 
 !-----------------------------------------------------------------------------
 
@@ -664,8 +643,3 @@ end subroutine get_expected_oxygen_ion_density
 end module obs_def_upper_atm_mod
 ! END DART PREPROCESS MODULE CODE      
 
-! <next few lines under version control, do not edit>
-! $URL$
-! $Id$
-! $Revision$
-! $Date$
