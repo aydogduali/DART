@@ -1,3 +1,5 @@
+.. _gtspp:
+
 GTSPP Observations
 ==================
 
@@ -25,6 +27,13 @@ The units in the source file are degrees C for temperature, g/kg for salinity, a
 information (not quality control, but observation instrument error values). There is probably instrument source
 information encoded in these files, but so far we don't have the key. The quality control values are read and only those
 with a QC of 1 are retained.
+
+.. Note::  
+
+   The GTSPP data is in PSU, the dart observation converter ``gtspp_to_obs`` converts the observations to MSU.
+ 
+   | PSU = g/kg
+   | MSU = PSU/1000 = kg/kg
 
 Programs
 --------

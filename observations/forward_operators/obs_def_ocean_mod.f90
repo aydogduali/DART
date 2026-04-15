@@ -70,6 +70,14 @@
 ! FERRYBOX_SALINITY,             QTY_SALINITY,              COMMON_CODE
 ! FERRYBOX_TEMPERATURE,          QTY_TEMPERATURE,           COMMON_CODE
 ! OCEAN_COLOR,                   QTY_SURFACE_CHLOROPHYLL,   COMMON_CODE
+! BATS_OXYGEN,                   QTY_DISSOLVED_OXYGEN,             COMMON_CODE
+! BATS_ALKALINITY,               QTY_ALKALINITY,                   COMMON_CODE
+! BATS_ORGANIC_CARBON,           QTY_DISSOLVED_ORGANIC_CARBON,     COMMON_CODE
+! BATS_INORGANIC_CARBON,         QTY_DISSOLVED_INORGANIC_CARBON,   COMMON_CODE
+! BATS_NITROGEN,                 QTY_DISSOLVED_ORGANIC_NITROGEN,   COMMON_CODE
+! BATS_NITRATE,                  QTY_NITRATE_CONCENTRATION,        COMMON_CODE
+! BATS_SILICATE,                 QTY_DISSOLVED_INORGANIC_SIO3,     COMMON_CODE
+! BATS_PHOSPHATE,                QTY_PHOSPHATE_CONCENTRATION,      COMMON_CODE
 ! END DART PREPROCESS TYPE DEFINITIONS
 
 ! From Ibrahim - 19 May 2009
@@ -440,7 +448,7 @@ else
 endif
 
 ! Check for illegal values 
-if (beam_angle <= 0.0_r8 .or. beam_angle >= 360.0_r8 ) then
+if (beam_angle < 0.0_r8 .or. beam_angle >= 360.0_r8 ) then
    write(msgstring,*) "beam_angle value must be between 0 and 360, got: ", &
                        beam_angle
    call error_handler(E_ERR, 'read_beam_angle', msgstring, &

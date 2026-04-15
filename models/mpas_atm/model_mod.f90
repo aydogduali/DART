@@ -104,7 +104,7 @@ use     obs_kind_mod, only : get_index_for_quantity,       &
                              QTY_SURFACE_TYPE,             &  ! for rttov
                              QTY_CLOUD_FRACTION               ! for rttov
 
-use mpi_utilities_mod, only: my_task_id, broadcast_minmax
+use mpi_utilities_mod, only: my_task_id, all_reduce_min_max
 
 use    random_seq_mod, only: random_seq_type, init_random_seq, random_gaussian
 
@@ -210,10 +210,10 @@ integer, parameter :: TIMELEN = 19
 
 ! Real (physical) constants as defined exactly in MPAS.
 ! redefined here for consistency with the model.
-real(r8), parameter :: rgas = 287.0_r8
-real(r8), parameter :: rv = 461.6_r8
-real(r8), parameter :: cp = 1003.0_r8
-real(r8), parameter :: cv = 716.0_r8
+real(r8), parameter :: rgas = 287.0_r8  ! Constant: Gas constant for dry air [J kg-1 K-1]
+real(r8), parameter :: rv = 461.6_r8    ! Constant: Gas constant for water vapor [J kg-1 K-1]
+real(r8), parameter :: cp = 7.0_r8*rgas/2.0_r8 ! = 1004.5 Constant: Specific heat of dry air at constant pressure [J kg-1 K-1] 
+real(r8), parameter :: cv = cp - rgas          ! = 717.5  Constant: Specific heat of dry air at constant volume [J kg-1 K-1]
 real(r8), parameter :: p0 = 100000.0_r8
 real(r8), parameter :: rcv = rgas/(cp-rgas)
 real(r8), parameter :: rvord = rv/rgas    
@@ -1812,7 +1812,7 @@ do i = 1, get_num_variables(anl_domid)
 enddo
 
 ! get global min/max for each variable
-call broadcast_minmax(min_var, max_var, num_variables)
+call all_reduce_min_max(min_var, max_var, num_variables)
 deallocate(within_range)
 
 call init_random_seq(random_seq, my_task_id()+1)
@@ -4162,14 +4162,14 @@ do while ( trim(bounds_table(1,n)) /= 'NULL' .and. trim(bounds_table(1,n)) /= ''
 
         bound = trim(bounds_table(2,n))
         if ( bound /= 'NULL' .and. bound /= '' ) then
-             read(bound,'(d16.8)') lower_bound
+             read(bound, *) lower_bound
         else
              lower_bound = missing_r8
         endif
 
         bound = trim(bounds_table(3,n))
         if ( bound /= 'NULL' .and. bound /= '' ) then
-             read(bound,'(d16.8)') upper_bound
+             read(bound, *) upper_bound
         else
              upper_bound = missing_r8
         endif
@@ -4686,8 +4686,8 @@ select case (ztypeout)
    fdata = 0.0_r8
    do i = 1, n
       where (istatus == 0)
-         fdata(i, :) = zGridFace(k_low(i, :),c(i))*(1.0_r8 - fract(i, :)) + &
-                       zGridFace(k_up (i, :),c(i))*fract(i, :)
+         fdata(i, :) = zGridCenter(k_low(i, :),c(i))*(1.0_r8 - fract(i, :)) + &
+                       zGridCenter(k_up (i, :),c(i))*fract(i, :)
       end where
    enddo
 
@@ -4954,7 +4954,7 @@ select case (ztypeout)
    ! we have the vert_level and cellid - no need to call find_triangle or find_vert_indices
 
    zout(:) = vert_level
-
+   istatus(:) = 0
    if (debug > 9 .and. do_output()) then
       write(string2,'("zout_in_level for member 1:",F10.2)') zout(1)
       call error_handler(E_MSG, 'convert_vert_distrib_state',string2,source, revision, revdate)
@@ -5013,10 +5013,12 @@ select case (ztypeout)
    ! of the quantities should use the level centers.
    if ( ndim == 1 )  then
       zout(:) = zGridFace(1, cellid)
+      istatus(:) = 0
    else
       zout(:) = zGridCenter(vert_level, cellid)
       if ( quantity == QTY_VERTICAL_VELOCITY ) zout(:) = zGridFace(vert_level, cellid)
       if ( quantity == QTY_EDGE_NORMAL_SPEED ) zout(:) = zGridEdge(vert_level, cellid)
+      istatus(:) = 0
    endif
 
    if (debug > 9 .and. do_output()) then
@@ -5045,7 +5047,7 @@ select case (ztypeout)
      !  surf F, norm F:  need fullp only
      !  surf F, norm T:  need both surfp and fullp
 
-     at_surf = (ztypein == VERTISSURFACE)
+     at_surf = (ztypein == VERTISSURFACE)  !HK ztypin is set to VERTISLEVEL before entering this case statement
      do_norm = .not. no_normalization_of_scale_heights
 
      ! if normalizing pressure and we're on the surface, by definition scale height 
@@ -7165,55 +7167,6 @@ end subroutine inside_triangle
 
 !------------------------------------------------------------
 
-subroutine latlon_to_xyz_on_plane(lat, lon, cellid, x, y, z)
-
-! FIXME: currently unused.  unless needed, could be removed.
-
-! Given a lat, lon in degrees, and the id of a cell in the
-! MPAS grid, return the cartesian x,y,z coordinate of that
-! location ON THE PLANE defined by the vertices of that cell.
-! This will be different from the x,y,z of the surface of the
-! sphere.  Uses the parametric form description from
-! http://en.wikipedia.org/wiki/Line-plane_intersection
-
-real(r8), intent(in)  :: lat, lon
-integer,  intent(in)  :: cellid
-real(r8), intent(out) :: x, y, z
-
-integer  :: nverts, i, vertexid
-real(r8) :: s(3)         ! location of point on surface
-real(r8) :: p(3,3)       ! first 3 vertices of cell, xyz
-real(r8) :: intp(3)      ! intersection point with plane
-
-call latlon_to_xyz(lat, lon, s(1), s(2), s(3))
-
-! get the first 3 vertices to define plane
-! intersect with sx,sy,sz to get answer
-
-! nedges and nverts is same
-nverts = nEdgesOnCell(cellid)
-if (nverts < 3) then
-   print *, 'nverts is < 3', nverts
-   stop
-endif
-
-! use first 3 verts to define plane
-do i=1, 3
-   vertexid = verticesOnCell(i, cellid)
-
-   p(1,i) = xVertex(vertexid)
-   p(2,i) = yVertex(vertexid)
-   p(3,i) = zVertex(vertexid)
-enddo
-
-x = intp(1)
-y = intp(2)
-z = intp(3)
-
-end subroutine latlon_to_xyz_on_plane
-
-!------------------------------------------------------------
-
 function vector_magnitude(a)
 
 ! Given a cartesian vector, compute the magnitude
@@ -7429,7 +7382,7 @@ function theta_to_tk (ens_size, theta, rho, qv, istatus)
 
 integer,                       intent(in)  :: ens_size
 real(r8), dimension(ens_size), intent(in)  :: theta    ! potential temperature [K]
-real(r8), dimension(ens_size), intent(in)  :: rho      ! dry density
+real(r8), dimension(ens_size), intent(in)  :: rho      ! dry air density [kg/m3]
 real(r8), dimension(ens_size), intent(in)  :: qv       ! water vapor mixing ratio [kg/kg]
 integer,  dimension(ens_size), intent(inout) :: istatus
 real(r8), dimension(ens_size) :: theta_to_tk          ! sensible temperature [K]
@@ -7457,7 +7410,7 @@ if ( debug > 0 .and. do_output()) then
 endif
 where (istatus == 0)
 
-   theta_m = (1.0_r8 + 1.61_r8 * qv_nonzero)*theta
+   theta_m = (1.0_r8 + rvord * qv_nonzero)*theta
    
    where (theta_m > 0.0_r8 .and. rho > 0.0_r8)  ! Check if all the input are positive
 
@@ -7490,7 +7443,7 @@ subroutine compute_full_pressure(ens_size, theta, rho, qv, pressure, tk, istatus
 
 integer,  intent(in)  :: ens_size
 real(r8), dimension(ens_size), intent(in)  :: theta    ! potential temperature [K]
-real(r8), dimension(ens_size), intent(in)  :: rho      ! dry density
+real(r8), dimension(ens_size), intent(in)  :: rho      ! dry air density [kg/m3]
 real(r8), dimension(ens_size), intent(in)  :: qv       ! water vapor mixing ratio [kg/kg]
 real(r8), dimension(ens_size), intent(out) :: pressure ! full pressure [Pa]
 real(r8), dimension(ens_size), intent(out) :: tk       ! return sensible temperature to caller
@@ -7506,7 +7459,7 @@ qv_nonzero = max(qv,0.0_r8)
 tk = theta_to_tk(ens_size, theta, rho, qv_nonzero, istatus)
 
 where (istatus == 0)       ! We only take non-missing tk here
-   pressure = rho * rgas * tk * (1.0_r8 + 1.61_r8 * qv_nonzero)
+   pressure = rho * rgas * tk * (1.0_r8 + rvord * qv_nonzero)
 end where
 
 if ( debug > 1 ) then

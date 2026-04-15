@@ -397,7 +397,8 @@ public ::         set_visir_metadata, &
                 write_rttov_metadata, &
           interactive_rttov_metadata, &
                get_expected_radiance, &
-            get_rttov_option_logical
+            get_rttov_option_logical, &
+                         get_channel
 
 ! The rttov_test.f90 program uses these, but no one else should.
 
@@ -591,7 +592,7 @@ end type rttov_platform_type
 type(rttov_platform_type), pointer :: platforms(:)
 
 ! version controlled file description for error handling, do not edit
-character(len=*), parameter :: source   = 'obs_def_rttov_mod.f90'
+character(len=*), parameter :: source   = 'obs_def_rttov13_mod.f90'
 character(len=*), parameter :: revision = ''
 character(len=*), parameter :: revdate  = ''
 
@@ -628,7 +629,7 @@ character(len=512)   :: rttov_sensor_db_file = 'unspecified'
 ! -----------------------------------------------------------------------------
 ! DART/RTTOV options in the input.nml namelist.
 ! 
-! DART exposes all of the RTTOV 12.3 options available and passes them to 
+! DART exposes all of the RTTOV 13 options available and passes them to 
 ! RTTOV with little to no additional checking for consistency. The default in 
 ! most cases can be used and need not be specified in the namelist. 
 !
@@ -707,6 +708,8 @@ logical              :: use_htfrtc           = .false.  ! use HTFRTC of Havemann
 integer              :: htfrtc_n_pc          = -1       ! number of PCs to use (HTFRTC only, max 300)
 logical              :: htfrtc_simple_cloud  = .false.  ! use simple-cloud scattering (HTFRTC only)
 logical              :: htfrtc_overcast      = .false.  ! calculate overcast radiances (HTFRTC only)
+real(r8)             :: wfetc_value          = 100000.0_r8 ! Real wfetc Wind fetch (m) (length of water over which the wind has blown, typical
+                                                           ! value 100000m for open ocean). Used if wfetc not provided by model.
 
 namelist / obs_def_rttov_nml/ rttov_sensor_db_file,   &
                               first_lvl_is_sfc,       &
@@ -778,7 +781,8 @@ namelist / obs_def_rttov_nml/ rttov_sensor_db_file,   &
                               use_htfrtc,             &
                               htfrtc_n_pc,            &
                               htfrtc_simple_cloud,    &
-                              htfrtc_overcast
+                              htfrtc_overcast,        &
+                              wfetc_value
 
 type(atmos_profile_type)     :: atmos
 type(trace_gas_profile_type) :: trace_gas
@@ -1834,7 +1838,7 @@ if (clw_data) then
 
    if (clw_scheme == 2) then
       allocate(clouds%clwde(ens_size, numlevels)) 
-      clouds%clwde = 20.0_jprb  ! lkugler default value
+      clouds%clwde = 20.0_jprb  ! reasonable default value
    end if
 end if
 
@@ -1848,7 +1852,7 @@ if (ciw_data) then
    clouds%ciw = 0.0_jprb
    if (ice_scheme == 1 .and. use_icede) then
       allocate(clouds%icede(ens_size, numlevels))
-      clouds%icede = 60.0_jprb  ! lkugler default value
+      clouds%icede = 60.0_jprb  ! reasonable default value
    end if
 end if
 
@@ -1945,6 +1949,7 @@ real(jprb) :: maxw
 
 logical :: is_visir
 logical :: is_mw
+logical :: is_vis
 logical :: is_cumulus
 integer :: instrument(3)
 integer :: surftype
@@ -1964,6 +1969,7 @@ instrument(3) = sensor % sensor_id
 
 is_visir = associated(visir_md)
 is_mw    = associated(mw_md)
+is_vis   = sensor%sensor_type_name == 'vis'
 
 if (.not. is_visir .and. .not. is_mw) then
    write(string1,*)'Neither vis/ir nor mw metadata were present for platform/sat/sensor id combination:',&
@@ -2004,6 +2010,8 @@ do j = 1, ens_size
 end do
 
 ! We would like a level index array to allow either surface first or surface last order
+! We assume that the input arrays (p, T, q, ...) are defined at levels.
+! For RTTOV-direct, cloud hydrometeors and aersols are averaged to layers. 
 
 ! One would assume the number of levels would not change between calls, but check
 if (allocated(lvlidx) .and. size(lvlidx) /= nlevels) then
@@ -2028,13 +2036,17 @@ if (.not. allocated(lvlidx)) then
    allocate(totalice(nlevels))
 end if
 
-! finally set the array to the correct order
+! RTTOV expects the input arrays to be organized 
+! from top-of-atmosphere (TOA) to bottom
 if (first_lvl_is_sfc) then
+   ! input data is ordered from surface to TOA
+   ! so we need to reverse the array
    do ilvl=1,nlevels
       lvlidx(ilvl) = nlevels - ilvl + 1
    end do
 else
-   do ilvl=nlevels,1,-1
+   ! do nothing, as the input data is ordered from TOA to surface
+   do ilvl=1,nlevels
       lvlidx(ilvl) = ilvl
    end do
 end if
@@ -2188,7 +2200,12 @@ DO imem = 1, ens_size
          end if 
 
          if (allocated(clouds % snow)) then
+            ! Following Kostka et al., 2014
+            if (is_vis) then
+            totalice(:) = totalice(:) + max(clouds % snow(imem,:)*0.10_r8,0.0_r8)
+            else
             totalice(:) = totalice(:) + max(clouds % snow(imem,:),0.0_r8)
+            end if
          end if 
 
          if (allocated(clouds % graupel)) then
@@ -2210,6 +2227,7 @@ DO imem = 1, ens_size
          end if
 
          ! depending on the vertical velocity and land type, classify clouds the way RTTOV wants 
+         runtime % profiles(imem) % cloud(:,:) = 0.0_jprb
          if (.not. is_cumulus) then
             ! stratus
             if (surftype == 0) then
@@ -2280,35 +2298,49 @@ DO imem = 1, ens_size
       ! nhydro_frac = 1 or nhydro
 
       if (allocated(clouds % cfrac) .and. runtime % opts_scatt % lusercfrac) then
-         ! Use custom cfrac values
-         ! TODO: specify cfrac (scalar?!)
-         ! runtime % cld_profiles(imem) % cfrac = ? not implemented
+         ! Custom cfrac = vertical maximum of the cloud fraction
+         runtime % cld_profiles(imem) % cfrac = max(min(maxval(clouds % cfrac(imem,lvlidx)), 1.0_r8), 0.0_r8)
       else
          ! normally calculated internally in RTTOV-SCATT
          runtime % cld_profiles(imem) % cfrac = -1
       end if
 
-      ! cloud fraction per hydrometeor type 
-      ! TODO: How do we get this from model data? From the 3D rain field?
-      runtime % cld_profiles(imem) % hydro_frac(:,:) = 1.0_jprb
+      ! Assign cloud fraction per hydrometeor type 
+      ! Not clear how to obtain hydrometeor specific cloud fraction information
+      ! Assume the cloud fraction profile is identical for each hydrometeor type
+      if (allocated(clouds % cfrac)) then
+         ! runtime % cld_profiles(imem) % hydro_frac(:,:) = 1.0_jprb
+         runtime % cld_profiles(imem) % hydro_frac(:,1) = max(clouds % cfrac(imem,lvlidx), 0.0_r8)
+         runtime % cld_profiles(imem) % hydro_frac(:,2) = max(clouds % cfrac(imem,lvlidx), 0.0_r8)
+         runtime % cld_profiles(imem) % hydro_frac(:,3) = max(clouds % cfrac(imem,lvlidx), 0.0_r8)
+         runtime % cld_profiles(imem) % hydro_frac(:,4) = max(clouds % cfrac(imem,lvlidx), 0.0_r8)
+         runtime % cld_profiles(imem) % hydro_frac(:,5) = max(clouds % cfrac(imem,lvlidx), 0.0_r8)
+      else
+         ! Assume cloud fraction is 1 everywhere.
+         runtime % cld_profiles(imem) % hydro_frac(:,:) = 1.0_jprb
+      endif
 
-      ! code proposed, depends on the hydrotables of RTTOV?
-      ! TODO: adapt to hydrotable, change indices of hydro(:,X) <--- here
+      ! This code may depend on hydrotables of RTTOV
       runtime % cld_profiles(imem) % hydro = 0.0_jprb
-      if (allocated(clouds % clw)) then
-         runtime % cld_profiles(imem) % hydro(:,0) = max(clouds % clw(imem,:),0.0_r8)
-      endif
       if (allocated(clouds % rain)) then
-         runtime % cld_profiles(imem) % hydro(:,1) = max(clouds % rain(imem,:),0.0_r8)
-      endif
-      if (allocated(clouds % ciw)) then
-         runtime % cld_profiles(imem) % hydro(:,2) = max(clouds % ciw(imem,:),0.0_r8)
+         runtime % cld_profiles(imem) % hydro(:,1) = max(clouds % rain(imem,lvlidx),0.0_r8)
       endif
       if (allocated(clouds % snow)) then
-         runtime % cld_profiles(imem) % hydro(:,3) = max(clouds % snow(imem,:),0.0_r8)
+         runtime % cld_profiles(imem) % hydro(:,2) = max(clouds % snow(imem,lvlidx),0.0_r8)
+      endif
+      if (allocated(clouds % graupel)) then
+         runtime % cld_profiles(imem) % hydro(:,3) = max(clouds % graupel(imem,lvlidx),0.0_r8)
       endif
       if (allocated(clouds % hail)) then
-         runtime % cld_profiles(imem) % hydro(:,4) = max(clouds % hail(imem,:),0.0_r8)
+         ! RTTOV only knows graupel -> add hail to graupel
+         runtime % cld_profiles(imem) % hydro(:,3) =  & 
+            runtime % cld_profiles(imem) % hydro(:,3) + max(clouds % hail(imem,lvlidx),0.0_r8)
+      endif
+      if (allocated(clouds % clw)) then
+         runtime % cld_profiles(imem) % hydro(:,4) = max(clouds % clw(imem,lvlidx),0.0_r8)
+      endif
+      if (allocated(clouds % ciw)) then
+         runtime % cld_profiles(imem) % hydro(:,5) = max(clouds % ciw(imem,lvlidx),0.0_r8)
       endif
 
       ! also add "half-level pressures" as requested by RTTOV-Scatt
@@ -2341,6 +2373,8 @@ DO imem = 1, ens_size
    if (allocated(atmos % wfetch)) then
       ! Wind fetch over the ocean (m)
       runtime % profiles(imem) % s2m % wfetc = atmos % wfetch(imem)  
+   else
+      runtime % profiles(imem) % s2m % wfetc = wfetc_value
    end if
    
    ! Surface type (0=land, 1=sea, 2=sea-ice)
@@ -3725,11 +3759,12 @@ GETLEVELDATA : do i = 1,numlevels
       if (return_now) return
    end if
 
-   ! clwde should be specified when clw_scheme == 2 (takes particle diameter from model); clw_scheme = 1 would parametrize diameters depending on cloud type
    if (clw_scheme == 2) then
-      ! The effective diameter must also be specified with clw_scheme 2
-      ! call interpolate(state_handle, ens_size, loc, QTY_CLOUDWATER_DE, clouds%clwde(:, i), this_istatus)
-      !clouds%clwde(:, i) = 2*1e6*clouds%clwde(:, i)  ! convert from WRF variable radius in m to DART diameter in micrometer
+      ! clw_scheme = 1 Parameterizes diameters depending on cloud type
+      ! clw_scheme = 2 requires setting clwde (effective diameter)
+      ! By default clwde is prescribed as constant value for clw_scheme = 2, otherwise uses QTY_CLOUDWATER_DE from model
+      ! If necessary model_mod should perform radius to diameter and units conversion
+      call interpolate(state_handle, ens_size, loc, QTY_CLOUDWATER_DE, clouds%clwde(:, i), this_istatus)
       call check_status('QTY_CLOUDWATER_DE', ens_size, this_istatus, val, loc, istatus, routine, source, revision, revdate, .false., return_now)
       if (return_now) return
    end if
@@ -3755,9 +3790,9 @@ GETLEVELDATA : do i = 1,numlevels
       if (return_now) return
 
       if (ice_scheme == 1 .and. use_icede) then
-         ! if use_icede with ice_scheme 1, must also specify ice effective diameter
-         !call interpolate(state_handle, ens_size, loc, QTY_CLOUD_ICE_DE, clouds%icede(:, i), this_istatus)
-         !clouds%icede(:, i) = 2*1e6*clouds%icede(:, i)  ! convert from WRF variable radius in m to DART diameter in micrometer
+         ! In this case, we must specify icede (ice effective diameter) from model
+         ! If necessary model_mod should perform radius to diameter and units conversion
+         call interpolate(state_handle, ens_size, loc, QTY_CLOUD_ICE_DE, clouds%icede(:, i), this_istatus)
          call check_status('QTY_CLOUD_ICE_DE', ens_size, this_istatus, val, loc, istatus, routine, source, revision, revdate, .false., return_now)
          if (return_now) return
       end if
@@ -4238,8 +4273,6 @@ function get_rttov_option_logical(field_name) result(p)
          p = USER_CLD_OPT_PARAM
       case('GRID_BOX_AVG_CLOUD')
          p = GRID_BOX_AVG_CLOUD
-      case('CLOUD_OVERLAP')
-         p = cloud_overlap
       case('ADDPC')
          p = ADDPC
       case('ADDRADREC')

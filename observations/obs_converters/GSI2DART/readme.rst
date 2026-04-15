@@ -1,3 +1,6 @@
+
+.. _gsi2dart:
+
 GSI2DART
 ========
 
@@ -5,7 +8,7 @@ Overview
 --------
 
 The GSI2DART converter was contributed by **Craig Schwartz** and **Jamie Bresch** of the 
-Mesoscale & Microscale Meteorology Lab at NCAR. *Thanks Craig and Jamie!* 
+Mesoscale & Microscale Meteorology Lab at NSF NCAR. *Thanks Craig and Jamie!* 
 
 This converter is designed to convert observation files created by the Gridpoint 
 Statistical Interpolation (GSI) system maintained by the National Oceanic and 

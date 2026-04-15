@@ -1161,11 +1161,24 @@ real(r8), allocatable :: distlist(:)
 
 if ( .not. module_initialized ) call initialize_module()
 
+
+if (maxdist <= 0.0_r8) then
+   write(msgstring, *) 'bad maxdist value ', maxdist, ' , must be > 0'
+   call error_handler(E_ERR, 'get_close_init', msgstring, source)
+endif
+
+
 ! Support per-loc-type localization more efficiently.
 typecount = get_num_types_of_obs()  ! ignore function name, this is specific type count
 allocate(gc%type_to_cutoff_map(typecount))
 
 if (present(maxdist_list)) then
+
+   if (any(maxdist_list <= 0.0_r8)) then
+      write(msgstring, *) 'bad maxdist_list value ', maxdist_list, ' , must be > 0'
+      call error_handler(E_ERR, 'get_close_init', msgstring, source)
+   endif
+
    if (size(maxdist_list) .ne. typecount) then
       write(msgstring,'(A,I8,A,I8)')'maxdist_list len must equal number of specific types, ', &
                                     size(maxdist_list), ' /= ', typecount
@@ -1433,7 +1446,6 @@ real(r8) :: cdist(size(locs))
 
 ! First, set the intent out arguments to a missing value
 num_close = 0
-close_ind = -99
 if(present(dist)) dist = -99.0_r8
 this_dist = 999999.0_r8   ! something big.
 

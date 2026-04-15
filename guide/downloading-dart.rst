@@ -3,7 +3,7 @@ Downloading DART
 
 The DART source code is distributed on the GitHub repository
 `NCAR/DART <https://github.com/NCAR/DART>`_ with the documentation
-served through :doc:`readthedocs<../README>`.
+served through :ref:`readthedocs <Welcome page>`.
 
 Go to https://github.com/NCAR/DART and clone the repository or get the
 ZIP file according to your preference. See the `github help page on
@@ -28,12 +28,6 @@ Github username.
    will need to be familiar with the
    `GitHub workflow <https://guides.github.com/introduction/flow/>`_.
 
-
-Unzip or clone the distribution in your desired directory, which we refer to as
-``DART`` in this document. Compiling the code in this tree (as is usually the
-case) may require a large amount of additional disk space (up to the 1 Gb
-required for DART), so be aware of any disk quota restrictions before
-continuing.
 
 Organization of the repository
 ------------------------------

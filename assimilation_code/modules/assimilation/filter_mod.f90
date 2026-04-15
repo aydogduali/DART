@@ -35,7 +35,7 @@ use utilities_mod,         only : error_handler, E_ERR, E_MSG, E_DBG,           
                                   set_multiple_filename_lists, find_textfile_dims
 
 use assim_model_mod,       only : static_init_assim_model, get_model_size,                    &
-                                  end_assim_model,  pert_model_copies
+                                  end_assim_model,  pert_model_copies, get_state_meta_data
 
 use assim_tools_mod,       only : filter_assim, set_assim_tools_trace, test_state_copies
 use obs_model_mod,         only : move_ahead, advance_state, set_obs_model_trace
@@ -46,11 +46,10 @@ use ensemble_manager_mod,  only : init_ensemble_manager, end_ensemble_manager,  
                                   compute_copy_mean, compute_copy_mean_sd,                    &
                                   compute_copy_mean_var, duplicate_ens, get_copy_owner_index, &
                                   get_ensemble_time, set_ensemble_time, broadcast_copy,       &
-                                  map_pe_to_task, prepare_to_update_copies,  &
-                                  copies_in_window, set_num_extra_copies, get_allow_transpose, &
-                                  all_copies_to_all_vars, allocate_single_copy, allocate_vars, &
-                                  get_single_copy, put_single_copy, deallocate_single_copy,   &
-                                  print_ens_handle
+                                  map_pe_to_task, copies_in_window, set_num_extra_copies,     &
+                                  get_allow_transpose, all_copies_to_all_vars,                &
+                                  allocate_single_copy, allocate_vars, get_single_copy,       &
+                                  put_single_copy, deallocate_single_copy, print_ens_handle
 
 use adaptive_inflate_mod,  only : do_ss_inflate, mean_from_restart, sd_from_restart,  &
                                   inflate_ens, adaptive_inflate_init,                 &
@@ -64,12 +63,6 @@ use adaptive_inflate_mod,  only : do_ss_inflate, mean_from_restart, sd_from_rest
 
 use mpi_utilities_mod,     only : my_task_id, task_sync, broadcast_send, broadcast_recv,      &
                                   task_count
-
-use smoother_mod,          only : smoother_read_restart, advance_smoother,             &
-                                  smoother_gen_copy_meta_data, smoother_write_restart, &
-                                  init_smoother, do_smoothing, smoother_mean_spread,   &
-                                  smoother_assim, smoother_ss_diagnostics,             &
-                                  smoother_end, set_smoother_trace
 
 use random_seq_mod,        only : random_seq_type, init_random_seq, random_gaussian
 
@@ -91,6 +84,14 @@ use state_structure_mod,   only : get_num_domains
 use forward_operator_mod,  only : get_obs_ens_distrib_state
 
 use quality_control_mod,   only : initialize_qc
+
+use location_mod,          only : location_type
+
+use probit_transform_mod,  only : transform_to_probit, transform_from_probit
+
+use algorithm_info_mod, only : probit_dist_info, init_algorithm_info_mod, end_algorithm_info_mod
+
+use distribution_params_mod, only : distribution_params_type
 
 !------------------------------------------------------------------------------
 
@@ -353,9 +354,8 @@ type(file_info_type) :: file_info_analysis
 type(file_info_type) :: file_info_output
 type(file_info_type) :: file_info_all
 
-logical :: ds, all_gone, allow_missing
+logical :: all_gone, allow_missing
 
-! real(r8), allocatable   :: temp_ens(:) ! for smoother
 real(r8), allocatable   :: prior_qc_copy(:)
 
 call filter_initialize_modules_used() ! static_init_model called in here
@@ -386,9 +386,6 @@ endif
 ! informational message to log
 write(msgstring, '(A,I5)') 'running with an ensemble size of ', ens_size
 call error_handler(E_MSG,'filter_main:', msgstring, source)
-
-! See if smoothing is turned on
-ds = do_smoothing()
 
 call set_missing_ok_status(allow_missing_clm)
 allow_missing = get_missing_ok_status()
@@ -441,6 +438,12 @@ if (do_output()) then
                                       inf_damping(POSTERIOR_INF), ' will be used'
       call error_handler(E_MSG,'filter_main:', msgstring)
    endif
+   if (do_rtps_inflate(post_inflate)) then
+      write(msgstring, *) 'Posterior inflation is RTPS, QCEFF ', &
+                              'inflation options will be ignored for posterior inflation'
+      call error_handler(E_MSG,'filter_main:', msgstring)
+   endif
+
 endif
 
 call trace_message('After  initializing inflation')
@@ -546,13 +549,6 @@ endif
 ! Set a time type for initial time if namelist inputs are not negative
 call filter_set_initial_time(init_time_days, init_time_seconds, time1, read_time_from_file)
 
-! Moved this. Not doing anything with it, but when we do it should be before the read
-! Read in or initialize smoother restarts as needed
-if(ds) then
-   call init_smoother(state_ens_handle, POST_INF_COPY, POST_INF_SD_COPY)
-   call smoother_read_restart(state_ens_handle, ens_size, model_size, time1, init_time_days)
-endif
-
 call     trace_message('Before reading in ensemble restart files')
 call timestamp_message('Before reading in ensemble restart files')
 
@@ -607,11 +603,6 @@ call filter_generate_copy_meta_data(seq, in_obs_copy, &
       prior_obs_mean_index, posterior_obs_mean_index, &
       prior_obs_spread_index, posterior_obs_spread_index, &
       compute_posterior)
-
-if(ds) call error_handler(E_ERR, 'filter', 'smoother broken by Helen')
-
-!>@todo fudge
-if(ds) call smoother_gen_copy_meta_data(num_output_state_members, output_inflation=.true.)
 
 call timestamp_message('After  initializing output files')
 call     trace_message('After  initializing output files')
@@ -730,15 +721,6 @@ AdvanceTime : do
 
    ! if model state data not at required time, advance model
    if (curr_ens_time /= next_ens_time) then
-      ! Advance the lagged distribution, if needed.
-      ! Must be done before the model runs and updates the data.
-      if(ds) then
-         call     trace_message('Before advancing smoother')
-         call timestamp_message('Before advancing smoother')
-         call advance_smoother(state_ens_handle)
-         call timestamp_message('After  advancing smoother')
-         call     trace_message('After  advancing smoother')
-      endif
 
       ! we are going to advance the model - make sure we're doing single file output
       if (.not. has_cycling) then
@@ -832,7 +814,6 @@ AdvanceTime : do
       call trace_message('Before prior inflation damping and prep')
 
       if (inf_damping(PRIOR_INF) /= 1.0_r8) then
-         call prepare_to_update_copies(state_ens_handle)
          state_ens_handle%copies(PRIOR_INF_COPY, :) = 1.0_r8 + &
             inf_damping(PRIOR_INF) * (state_ens_handle%copies(PRIOR_INF_COPY, :) - 1.0_r8)
       endif
@@ -923,35 +904,16 @@ AdvanceTime : do
    call timestamp_message('After  observation assimilation')
    call     trace_message('After  observation assimilation')
 
-   ! Do the update for the smoother lagged fields, too.
-   ! Would be more efficient to do these all at once inside filter_assim
-   ! in the future
-   if(ds) then
-      write(msgstring, '(A,I8,A)') 'Ready to reassimilate up to', size(keys), ' observations in the smoother'
-      call trace_message(msgstring, 'filter:', -1)
-
-      call     trace_message('Before smoother assimilation')
-      call timestamp_message('Before smoother assimilation')
-      call smoother_assim(obs_fwd_op_ens_handle, seq, keys, ens_size, num_groups, &
-         obs_val_index, ENS_MEAN_COPY, ENS_SD_COPY, &
-         PRIOR_INF_COPY, PRIOR_INF_SD_COPY, OBS_KEY_COPY, OBS_GLOBAL_QC_COPY, &
-         OBS_MEAN_START, OBS_MEAN_END, OBS_VAR_START, &
-         OBS_VAR_END)
-      call timestamp_message('After  smoother assimilation')
-      call     trace_message('After  smoother assimilation')
-   endif
-
    ! Already transformed, so compute mean and spread for state diag as needed
    call compute_copy_mean_sd(state_ens_handle, 1, ens_size, ENS_MEAN_COPY, ENS_SD_COPY)
 
-   ! This block applies posterior inflation
+   ! This block damps the posterior inflation
 
    if(do_ss_inflate(post_inflate)) then
 
       call trace_message('Before posterior inflation damping')
 
       if (inf_damping(POSTERIOR_INF) /= 1.0_r8) then
-         call prepare_to_update_copies(state_ens_handle)
          state_ens_handle%copies(POST_INF_COPY, :) = 1.0_r8 + &
             inf_damping(POSTERIOR_INF) * (state_ens_handle%copies(POST_INF_COPY, :) - 1.0_r8)
       endif
@@ -976,11 +938,6 @@ AdvanceTime : do
          else
             call write_state(state_ens_handle, file_info_postassim)
          endif
-
-         !>@todo What to do here?
-         !call smoother_ss_diagnostics(model_size, num_output_state_members, &
-         !  output_inflation, temp_ens, ENS_MEAN_COPY, ENS_SD_COPY, &
-         ! POST_INF_COPY, POST_INF_SD_COPY)
 
          call timestamp_message('After  postassim state space output')
          call     trace_message('After  postassim state space output')
@@ -1030,11 +987,6 @@ AdvanceTime : do
       call timestamp_message('After  computing posterior observation values')
       call     trace_message('After  computing posterior observation values')
    
-      if(ds) then
-         call trace_message('Before computing smoother means/spread')
-         call smoother_mean_spread(ens_size, ENS_MEAN_COPY, ENS_SD_COPY)
-         call trace_message('After  computing smoother means/spread')
-      endif
    
       call trace_message('Before posterior obs space diagnostics')
    
@@ -1103,11 +1055,6 @@ AdvanceTime : do
             call write_state(state_ens_handle, file_info_analysis)
          endif
 
-         !>@todo What to do here?
-         !call smoother_ss_diagnostics(model_size, num_output_state_members, &
-         !  output_inflation, temp_ens, ENS_MEAN_COPY, ENS_SD_COPY, &
-         ! POST_INF_COPY, POST_INF_SD_COPY)
-
          call timestamp_message('After  analysis state space output')
          call     trace_message('After  analysis state space output')
 
@@ -1152,9 +1099,6 @@ if (get_stage_to_write('output')) then
       if (.not. write_all_stages_at_end) &
          call write_state(state_ens_handle, file_info_output)
    
-      !>@todo need to fix smoother
-      !if(ds) call smoother_write_restart(1, ens_size)
-
       call timestamp_message('After  state space output')
       call     trace_message('After  state space output')
 
@@ -1207,18 +1151,15 @@ call trace_message('Before end_model call')
 call end_assim_model()
 call trace_message('After  end_model call')
 
+! deallocate qceff_table_data structures
+call end_algorithm_info_mod()
+
 call trace_message('Before ensemble and obs memory cleanup')
 call end_ensemble_manager(state_ens_handle)
 
 ! Free up the obs sequence
 call destroy_obs_sequence(seq)
 call trace_message('After  ensemble and obs memory cleanup')
-
-if(ds) then
-   call trace_message('Before smoother memory cleanup')
-   call smoother_end()
-   call trace_message('After  smoother memory cleanup')
-endif
 
 call     trace_message('Filter done')
 call timestamp_message('Filter done')
@@ -1335,6 +1276,10 @@ call static_init_obs_sequence()
 call static_init_assim_model()
 call state_vector_io_init()
 call initialize_qc()
+
+! Initialize algorothm_info_mod and read in QCF table data
+call init_algorithm_info_mod()
+
 call trace_message('After filter_initialize_module_used call')
 
 end subroutine filter_initialize_modules_used
@@ -1616,9 +1561,13 @@ type(adaptive_inflate_type), intent(inout) :: inflate
 integer, optional,           intent(in)    :: SPARE_PRIOR_SPREAD, ENS_SD_COPY
 
 integer :: j, group, grp_bot, grp_top, grp_size
-
-! Assumes that the ensemble is copy complete
-call prepare_to_update_copies(ens_handle)
+type(location_type) :: my_state_loc
+integer :: my_state_kind
+type(distribution_params_type) :: dist_params
+real(r8) :: probit_ens(ens_size), probit_ens_mean
+logical  :: bounded_below, bounded_above
+real(r8) :: lower_bound,   upper_bound
+integer  :: dist_type, ierr
 
 ! Inflate each group separately;  Divide ensemble into num_groups groups
 grp_size = ens_size / num_groups
@@ -1647,9 +1596,33 @@ do group = 1, num_groups
          call error_handler(E_ERR,'filter_ensemble_inflate',msgstring,source)
       endif 
    else 
+
+      ! This is an initial test of doing inflation in probit space
+      ! Note that this appears to work with adaptive inflation, but more research would be good
+      ! Probably also shouldn't be used with groups for now although it is coded to do so
       do j = 1, ens_handle%my_num_vars
-         call inflate_ens(inflate, ens_handle%copies(grp_bot:grp_top, j), &
-            ens_handle%copies(ENS_MEAN_COPY, j), ens_handle%copies(inflate_copy, j))
+         call get_state_meta_data(ens_handle%my_vars(j), my_state_loc, my_state_kind)    
+
+         ! Need to specify what kind of prior to use for each
+         call probit_dist_info(my_state_kind, .true., .true., dist_type, &
+            bounded_below, bounded_above, lower_bound, upper_bound)
+
+         call transform_to_probit(grp_size, ens_handle%copies(grp_bot:grp_top, j), &
+            dist_type, dist_params, probit_ens(1:grp_size), .false., &
+               bounded_below, bounded_above, lower_bound, upper_bound, ierr)
+
+         ! Only inflate if successful return from the probit transform
+         if(ierr == 0) then
+            ! Compute the ensemble mean in transformed space
+            probit_ens_mean = sum(probit_ens(1:grp_size)) / grp_size
+            ! Inflate in probit space
+            call inflate_ens(inflate, probit_ens(1:grp_size), probit_ens_mean, &
+               ens_handle%copies(inflate_copy, j))
+            ! Transform back from probit space
+            call transform_from_probit(grp_size, probit_ens(1:grp_size), &
+               dist_params, ens_handle%copies(grp_bot:grp_top, j))
+         endif
+
       end do
    endif
 end do
@@ -1784,7 +1757,7 @@ real(r8)              :: rvalue(1)
 io_task = map_pe_to_task(obs_fwd_op_ens_handle, 0)
 my_task = my_task_id()
 
-! write the obs_seq.final file
+! create temp space for QC values
 if (my_task == io_task) then
    allocate(obs_temp(num_obs_in_set))
 else 
@@ -1910,7 +1883,6 @@ if (silence) then
    timestamp_level = -1
 endif
 
-call set_smoother_trace(trace_level, timestamp_level)
 call set_obs_model_trace(trace_level, timestamp_level)
 call set_assim_tools_trace(trace_level, timestamp_level)
 
@@ -2098,7 +2070,7 @@ endif
 ! qc_ens_handle is a real representing an integer; values /= 0 get written out
 do i = 1, ens_size
    do j = 1, qc_ens_handle%my_num_vars
-      if(nint(qc_ens_handle%copies(i, j)) /= 0) write(forward_unit, *) i, keys(j), nint(qc_ens_handle%copies(i, j))
+      if(nint(qc_ens_handle%copies(i, j)) /= 0) write(forward_unit, *) i, j, keys(qc_ens_handle%my_vars(j)), nint(qc_ens_handle%copies(i, j))
    end do
 end do
 
@@ -2313,7 +2285,7 @@ end subroutine store_copies
 !------------------------------------------------------------------
 !> Count the number of copies to be allocated for the ensemble manager
 
-function count_state_ens_copies(ens_size, post_inflate, prior_inflate) result(num_copies)
+function count_state_ens_copies(ens_size, prior_inflate, post_inflate) result(num_copies)
 
 integer,                     intent(in) :: ens_size
 type(adaptive_inflate_type), intent(in) :: prior_inflate

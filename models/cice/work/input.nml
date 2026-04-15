@@ -1,3 +1,10 @@
+&probit_transform_nml
+   /
+
+&algorithm_info_nml
+   qceff_table_filename = ''
+   /
+
 &perfect_model_obs_nml
    read_input_state_from_file = .true.
    write_output_state_to_file = .true.
@@ -76,7 +83,6 @@
 
 # cutoff of 0.03 (radians) is about 200km
 &assim_tools_nml
-   filter_kind                     = 1
    cutoff                          = 0.05
    sort_obs_inc                    = .false.
    spread_restoration              = .false.
@@ -177,11 +183,10 @@
 
 
 &dart_to_cice_nml
-   dart_to_cice_input_file   = 'dart_restart.nc'
-   original_cice_input_file  = 'cice_restart.nc'
-   previous_cice_input_file  = 'pre_restart.nc'
-   balance_method            = 'simple_squeeze'
-   r_snw_name                = 'r_snw_vary'
+   dart_to_cice_input_file     = 'dart_restart.nc'
+   original_cice_restart_file  = 'PRELIM.cice_0021.r.2018-10-14-00000.nc'
+   postprocessed_output_file   = 'pre_restart.nc'
+   postprocess                 = 'cice'
    /
 
 
@@ -203,13 +208,6 @@
    /
 
 
-&smoother_nml
-   num_lags              = 0
-   start_from_restart    = .false.
-   output_restart        = .false.
-   restart_in_file_name  = 'smoother_ics'
-   restart_out_file_name = 'smoother_restart'
-   /
 
 
 &mpi_utilities_nml
