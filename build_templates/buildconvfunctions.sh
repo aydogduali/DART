@@ -25,19 +25,20 @@
 #
 # The GSI obs converter needs mpi
 #  mpisrc="null_mpi"
-#  windowsrc=""
 #  m=""
 #-------------------------
 set -e
 declare -a programs
-source "$DART"/build_templates/buildpreprocess.sh
 
 # Defaults
 mpisrc="null_mpi"
-windowsrc=""
 m=""
 LIBRARIES=""
 EXTRA=""
+version_def=""
+
+source "$DART"/build_templates/buildpreprocess.sh
+dartversion
 
 #-------------------------
 # print usage and exit
@@ -45,11 +46,11 @@ EXTRA=""
 function print_usage() {
   echo ""
   echo " Usage:   "
-  echo "  buildconverter.sh               : build everything"
-  echo "  buildconverter.sh clean         : clean the build" 
-  echo "  buildconverter.sh help          : print help message"
+  echo "  quickbuild.sh               : build everything"
+  echo "  quickbuild.sh clean         : clean the build"
+  echo "  quickbuild.sh help          : print help message"
   echo "   " 
-  echo "  buildconverter.sh [program]     : build a single program"
+  echo "  quickbuild.sh [program]     : build a single program"
   echo "   " 
   exit
 }
@@ -115,30 +116,31 @@ local misc="$DART/models/utilities/ \
             $DART/assimilation_code/modules/observations/obs_kind_mod.f90 \
             $DART/assimilation_code/modules/observations/obs_sequence_mod.f90 \
             $DART/assimilation_code/modules/observations/forward_operator_mod.f90 \
-            $DART/observations/obs_converters/utilities/obs_utilities_mod.f90"
+            $DART/observations/obs_converters/utilities/obs_utilities_mod.f90 \
+            $DART/build_templates/version_mod.F90"
 local obserrsrc=$DART/observations/obs_converters/obs_error/$OBS_ERROR"_obs_err_mod.f90"
 
 # remove null/mpi from list
 local mpi="$DART"/assimilation_code/modules/utilities/mpi_utilities_mod.f90
+local mpif08="$DART"/assimilation_code/modules/utilities/mpif08_utilities_mod.f90
 local nullmpi="$DART"/assimilation_code/modules/utilities/null_mpi_utilities_mod.f90
 local nullwin="$DART"/assimilation_code/modules/utilities/null_win_mod.f90
-local craywin="$DART"/assimilation_code/modules/utilities/cray_win_mod.f90
-local nocraywin="$DART"/assimilation_code/modules/utilities/no_cray_win_mod.f90
+local win="$DART"/assimilation_code/modules/utilities/win_mod.f90
+local winf08="$DART"/assimilation_code/modules/utilities/winf08_mod.f90
 
 if [ "$mpisrc" == "mpi" ]; then
 
    core=${core//$nullmpi/}
    core=${core//$nullwin/}
-   if [ "$windowsrc" == "craywin" ]; then
-       core=${core//$nocraywin/}
-   else #nocraywin
-       core=${core//$craywin/}
-   fi
+   core=${core//$mpif08/}
+   core=${core//$winf08/}
+
 else #nompi
 
    core=${core//$mpi/}
-   core=${core//$nocraywin/}
-   core=${core//$craywin/}
+   core=${core//$mpif08/}
+   core=${core//$win/}
+   core=${core//$winf08/}
 fi
 
 convsrc="${core} ${conv} ${obserrsrc} ${modelsrc} ${misc} ${loc}"

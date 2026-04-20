@@ -9,7 +9,7 @@ program perfect_model_obs
 use        types_mod,     only : r8, i8, metadatalength, MAX_NUM_DOMS
 use    utilities_mod,     only : error_handler, &
                                  find_namelist_in_file, check_namelist_read, &
-                                 E_ERR, E_MSG, E_DBG, nmlfileunit, timestamp, &
+                                 E_ERR, E_MSG, E_ALLMSG, E_DBG, nmlfileunit, timestamp, &
                                  do_nml_file, do_nml_term, logfileunit, &
                                  open_file, close_file
 use time_manager_mod,     only : time_type, get_time, set_time, operator(/=), print_time,   &
@@ -23,8 +23,10 @@ use obs_sequence_mod,     only : read_obs_seq, obs_type, obs_sequence_type,     
                                  delete_seq_tail, destroy_obs, destroy_obs_sequence
                                  
 
-use      obs_def_mod,     only : obs_def_type, get_obs_def_error_variance, get_obs_def_time
+use      obs_def_mod,     only : obs_def_type, get_obs_def_error_variance, get_obs_def_time, &
+                                 get_obs_def_type_of_obs
 use    obs_model_mod,     only : move_ahead, advance_state, set_obs_model_trace
+use    obs_kind_mod, only : get_quantity_for_type_of_obs
 use  assim_model_mod,     only : static_init_assim_model, get_model_size,                    &
                                  get_initial_condition
    
@@ -34,9 +36,8 @@ use mpi_utilities_mod,    only : task_count, task_sync, initialize_mpi_utilities
 use   random_seq_mod,     only : random_seq_type, init_random_seq, random_gaussian
 use ensemble_manager_mod, only : init_ensemble_manager,               &
                                  end_ensemble_manager, ensemble_type,  &
-                                 get_my_num_copies, get_ensemble_time, prepare_to_write_to_vars,      &
-                                 prepare_to_read_from_vars, allocate_vars,  &
-                                 all_vars_to_all_copies, &
+                                 get_my_num_copies, get_ensemble_time,   &
+                                 allocate_vars, all_vars_to_all_copies,    &
                                  all_copies_to_all_vars
 
 use           filter_mod, only : filter_set_initial_time, filter_sync_keys_time
@@ -60,6 +61,8 @@ use distributed_state_mod, only : create_state_window, free_state_window
 use forward_operator_mod, only : get_expected_obs_distrib_state
 
 use mpi_utilities_mod,    only : my_task_id
+
+use algorithm_info_mod,   only : init_algorithm_info_mod, obs_error_info, end_algorithm_info_mod
 
 implicit none
 
@@ -107,7 +110,8 @@ character(len=256) :: input_state_files(MAX_NUM_DOMS)  = '',               &
                       obs_seq_out_file_name           = 'obs_seq.out',     &
                       adv_ens_command                 = './advance_model.csh'
 
-namelist /perfect_model_obs_nml/ read_input_state_from_file, write_output_state_to_file, &
+namelist /perfect_model_obs_nml/ read_input_state_from_file,&
+                                 write_output_state_to_file,                        &
                                  init_time_days, init_time_seconds, async,          &
                                  first_obs_days, first_obs_seconds,                 &
                                  last_obs_days,  last_obs_seconds, output_interval, &
@@ -171,6 +175,11 @@ type(file_info_type) :: file_info_true
 
 character(len=256), allocatable :: input_filelist(:), output_filelist(:), true_state_filelist(:)
 integer :: nfilesin, nfilesout
+
+! Storage for bounded error 
+logical  :: bounded_below, bounded_above
+real(r8) :: lower_bound,   upper_bound
+real(r8) :: error_variance
 
 ! Initialize all modules used that require it
 call perfect_initialize_modules_used()
@@ -440,8 +449,10 @@ AdvanceTime: do
    write(msgstring, '(A,I7)') 'Number of observations to be evaluated', &
       num_obs_in_set
    call trace_message(msgstring)
-   call print_obs_time(seq, key_bounds(1), 'Time of first observation in window')
-   call print_obs_time(seq, key_bounds(2), 'Time of last  observation in window')
+   if(my_task_id() == 0) then
+      call print_obs_time(seq, key_bounds(1), 'Time of first observation in window')
+      call print_obs_time(seq, key_bounds(2), 'Time of last  observation in window')
+   endif
 
    ! for multi-core runs, each core needs to store the forward operator and the qc value
    call init_ensemble_manager(fwd_op_ens_handle, ens_size, int(num_obs_in_set,i8), 1, transpose_type_in = 2)
@@ -454,8 +465,6 @@ AdvanceTime: do
    call get_time_range_keys(seq, key_bounds, num_obs_in_set, keys)
 
    call trace_message('After  setup for next group of observations')
-
-   call prepare_to_read_from_vars(ens_handle)
 
    ! Output the true state to the netcdf file
    if((output_interval > 0) .and. &
@@ -478,6 +487,8 @@ AdvanceTime: do
    ! Compute the forward observation operator for each observation in set
    do j = 1, fwd_op_ens_handle%my_num_vars
 
+      global_obs_num = fwd_op_ens_handle%my_vars(j)
+
       ! Some compilers do not like mod by 0, so test first.
       if (print_every_nth_obs > 0) nth_obs = mod(j, print_every_nth_obs)
 
@@ -485,15 +496,14 @@ AdvanceTime: do
       ! to indicate progress is being made and to allow estimates
       ! of how long the assim will take.
       if (nth_obs == 0) then
-         write(msgstring, '(A,1x,I8,1x,A,I8)') 'Processing observation ', j, &
-                                            ' of ', num_obs_in_set
-         call trace_message(msgstring, 'perfect_model_obs:', -1)
+         write(msgstring, '(A,1x,I8,1x,A,I8)') 'Processing observation ', global_obs_num, &
+                                      ' of ', num_obs_in_set
+         call error_handler(E_ALLMSG, 'perfect_model_obs:' ,trim(msgstring))
          ! or if you want timestamps:
          !     call timestamp(msgstring, pos="debug")
       endif
-      
+
       ! Compute the observations from the state
-      global_obs_num = fwd_op_ens_handle%my_vars(j)
       call get_expected_obs_distrib_state(seq, keys(global_obs_num:global_obs_num), &
          curr_ens_time, .true., &
          istatus, assimilate_this_ob, evaluate_this_ob, &
@@ -539,8 +549,38 @@ AdvanceTime: do
          ! If observation is not being evaluated or assimilated, skip it
          ! Ends up setting a 1000 qc field so observation is not used again.
          if( qc_ens_handle%vars(i, 1) == 0 ) then
-            obs_value(1) = random_gaussian(random_seq, true_obs(1), &
-               sqrt(get_obs_def_error_variance(obs_def)))
+
+            ! Get the information for generating error sample for this observation
+            call obs_error_info(obs_def, error_variance, &
+                 bounded_below, bounded_above, lower_bound, upper_bound)
+
+            ! Capability to do a bounded normal error
+            if(bounded_below .and. bounded_above) then
+               ! Bounds on both sides
+               obs_value(1) = lower_bound - 1.0_r8
+               do while(obs_value(1) < lower_bound .or. obs_value(1) > upper_bound)
+                  obs_value(1) = random_gaussian(random_seq, true_obs(1), &
+                     sqrt(error_variance))
+               end do
+            elseif(bounded_below .and. .not. bounded_above) then
+               ! Bound on lower side
+               obs_value(1) = lower_bound - 1.0_r8
+               do while(obs_value(1) < lower_bound)
+                  obs_value(1) = random_gaussian(random_seq, true_obs(1), &
+                     sqrt(error_variance))
+               end do
+            elseif(.not. bounded_below .and. bounded_above) then
+               ! Bound on upper side
+               obs_value(1) = upper_bound + 1.0_r8
+               do while(obs_value(1) > upper_bound)
+                  obs_value(1) = random_gaussian(random_seq, true_obs(1), &
+                     sqrt(error_variance))
+               end do
+            else
+            ! No bounds, regular old normal distribution
+               obs_value(1) = random_gaussian(random_seq, true_obs(1), &
+                  sqrt(error_variance))
+            endif
 
             ! FIX ME SPINT: if the foward operater passed can we directly set the
             ! qc status?
@@ -618,6 +658,8 @@ call destroy_obs(obs)
 call destroy_obs_sequence(seq)
 call trace_message('After  ensemble and obs memory cleanup')
 
+call end_algorithm_info_mod()
+
 call trace_message('Perfect_model done')
 call timestamp_message('Perfect_model done')
 
@@ -645,6 +687,7 @@ call static_init_assim_model()
 
 call state_vector_io_init()
 call initialize_qc()
+call init_algorithm_info_mod()
 
 end subroutine perfect_initialize_modules_used
 

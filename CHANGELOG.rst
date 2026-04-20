@@ -22,6 +22,776 @@ individual files.
 
 The changes are now listed with the most recent at the top.
 
+**April 14 2026 :: WRF nested tutorial. Tag v11.22.0**
+
+New features:
+
+  - New WRF Tutorial with severe storm nested domain example
+  - Automatic downscaling for WRF nested domains
+  - Perturbation step (WRFDA CV3) within tutorial
+  - Assimilation and forecast modes in tutorial
+  - WRF shell scripting converted to function-based bash scripts
+
+Bug-fix:
+
+  - Imposes mandatory terrain-following coordinates to 
+    eliminate boundary condition bug during WRF perturbation step.
+
+Documentation updates:
+
+  - WRF tutorial rewritten for nested Kansas 2024 severe storm example
+
+
+
+**March 23 2026 :: CCE compiler flags. Tag v11.21.2**
+
+- Updated mkmf.template for CCE compiler 
+- Default qtys updated with land qtys
+
+Documentation updates:
+
+  - Removed duplicate list of observation converters
+  - Anchors for observation converter docs
+
+Bug-fix:
+
+  - Removed _r8 from .nml files
+
+**March 6 2026 :: MOM6 clamping. Tag v11.21.1**
+
+MOM6:
+
+  - Add clamping options to model_nml for MOM6
+  - Sets vertical localization coordinate
+  - Bug-fixes:
+
+     - vertical interpolation for thickness was missing first layer thickness
+     - vertical interpolation lev_fract fixed for pseudo-depth
+
+Documentation:
+
+  - pytools documentation added for pyfortran and pyqceff
+
+**February 27 2026 :: pywatershed. Tag v11.21.0**
+
+New features:
+
+  - Interface to hydrologic model pywatershed
+  - GitHub actions for pytools
+
+Bug-fix:
+
+  - Removed check on initialized variables in mkmf.template.ifx
+    due to ifx problems
+
+Documentation updates:
+
+  - NSF NCAR branding update 
+
+**February 4 2026 :: IODA2obsq. Tag v11.20.1**
+
+New feature:
+
+  - Radiances added to pyjedi ioda2obsq tool for DART JEDI interoperability
+ 
+    *contributed by Stephen Herbener, as part of DART collaboration with JCSDA*
+
+Bug-fix:
+
+  - WRF model_mod bug-fix for 3D potential temperature interpolation
+
+**January 8 2026 :: ARVOR Float and SVP Drifters. Tag v11.20.0**
+
+New Features:
+
+  - ARVOR float observation converter
+  - SVP drifter observation converter
+  - csv read utilities
+
+Bug-fix:
+
+  - Remove format read for clamping values in parse_variables_clamp,
+    wrf, mpas, tiegcm that caused integers to be misread.
+
+**January 6 2026 :: DART Data Archive. Tag v11.19.3**
+
+- WRF tutorial updated to get data from data.dart.ucar.edu
+- Fix defaults for MOM6 assimilation period to 1 day
+
+**December 31 2025 :: Log DART version. Tag v11.19.2** 
+
+New Features:
+
+  - | Version of DART logged in program message 
+    | *contributed by Kamil Yousuf*
+  - Tests for parse_args_mod
+  - Remove close_ind array initialization for 3d sphere and 3d 
+    cartesian location_mods to improve get_close performance. 
+
+Bug-fixes:
+
+  - model_mod_check model_size collected in test initialization
+
+**December 3 2025 :: BAMS article. Tag v11.19.1**
+
+Documentation updates:
+
+  - How to cite DART
+  - Bulletin of the American Meteorological Society 2025 article
+
+Bug-fix:
+
+  - Assert sea surface height is present in the state for ROMS Rutgers 
+    model_interpolate
+
+**November 13 2025 :: HF Radar converter. Tag v11.19.0**
+
+New features:
+
+- High Frequency (HF) Radar ocean observation converter
+- ROMS–Rutgers: Option to use Sea Surface Height from the template file, 
+  assuming the ensemble mean is provided in that file.
+
+Bug-fix:
+
+- Corrected consistency check across restarts when fill or missing attributes are NaN. 
+
+**November 11 2025 :: Aether Cube Sphere. Tag v11.18.0**
+
+- Aether cube sphere interface added to DART.
+- SLANT_GPS_VTEC QTY and obs_def
+
+**November 3 2025 :: DART tutorial. Tag 11.17.0**
+
+- DART tutorial updated to QCEFF v11
+- DART tutorial now an extension of DART_LAB
+- Lorenz_96/work directory contains input files needed for DART_LAB6:DART_tutorial
+- PDF tutorial slides relocated to a separate repo: https://github.com/NCAR/dart-tutorial
+
+**October 10 2025 :: Bug-fix: MOM6 localization. Tag v11.16.1**
+
+- Fix state index passed to below_sea_floor
+- Convert state vertical location to meters inside get_close_state
+
+**October 2 2025 :: CrocoLake observation converter. Tag v11.16.0**
+
+- Observation converter for CrocoLake.
+
+*contributed by Enrico Milanese, Woods Hole Oceanographic Institution*
+
+**September 17 2025 :: Radiance Updates. Tag v11.15.0**
+
+Radiance updates:
+  - Enables microwave radiance emission for RTTOV13
+  - Allows user to bring in liquid/ice effective droplet radius from model as an alternative to the fixed default value
+  - Specifies the max cloud fraction from the model as the effective cloud fraction
+  - Fixes hydrometeor type 'hydrotable' to expect the order: rain, snow, graupel, cloud water cloud ice
+  - For visible radiance applies empirical 0.1 factor against snow when calculating total cloud ice
+  - Documentation rewritten to give an overview over capabilities, list advice, and give references to further material
+  - WRF model_mod: added type_clwde type_icede
+
+  *Developed in collaboration with Lukas Kugler*
+
+Documentation updates:
+  - Improved contributors guide 
+  - Default_model_mod routines docs improved for usage in model_mods
+  - Brief history of  DART extended to present day
+  - Duplicate/out-of-date location_mod doc remoted
+
+Bug fixes:
+  - Standard C compliance for gregorian_time.c
+  - obs_def_rttov_mod.f90 TOA indexing
+
+
+**August 28 2025 :: KDE and CICE-DART improvements. Tag v11.14.2**
+
+KDE performance improvements:
+  - Fixed ITP algorithm in the rootfinding mod, faster convergence.
+  - Namelist option for KDE to use 5th, 7th or 9th order Gaussian quadrature.
+  - Boundary correction has been updated to reduce unnecessary computation.
+  - Unused function removed.
+
+  *contributed by Ian Grooms*
+
+CICE-DART postprocessing improvements:
+  - Two new post processing options.
+
+  *contributed by Molly Wieringa*
+
+**August 27 2025 :: WOD bug-fix and QCEFF tolerance. Tag v11.14.1**
+
+Bug-fixes:
+  - WOD observation converter fixed to be compatible with WOD2023.   
+    *Contributed by Kate Boden, University of Colorado Boulder*
+  - Build fixes for ROMS observation converter, and CICE observation converter.
+
+QCEFF update:
+  - Reduced tolerance on convergence in normal_distribution_mod::inv_cdf.
+  - Early return if initial guess is correct.
+
+Documentation update:
+  - POP initial ensemble now available on Zenodoo.
+
+
+**August 19 2025 :: ROMS Rutgers. Tag v11.14.0**
+
+New Features:
+  - ROMS Rutgers interface
+
+Fixes:
+  - Limit number of resubmits in WRF-DART
+  - CLM documentation link fix 
+
+Developer tools:
+  - pyfortran utility to find unused routines
+
+**August 13 2025 :: IODA2obsq. Tag v11.13.0-pyjedi**
+
+- Initial pyjedi package for DART JEDI interoperability.
+- ioda2obsq tool for conventional observations.  
+
+*contributed by Stephen Herbener, DART collaboration with JCSDA*
+
+**July 30 2025 :: MOM6 interpolation bug-fixes. Tag v11.12.1**
+
+- Fixes quad points assignment in model_interpolate
+- Fixes u/v interpolation handle selection
+- Fixes get_close_state dry land distance setting
+- Fixes pressure calculation for sensible temperature
+
+**July 24 2025 :: MOM6 pseudo depth, MODIS ice surface temp. Tag v11.12.0**
+
+New features:
+
+- MODIS ice surface temperature observation converter
+  *contributed by Molly Wieringa*
+- Option to use pseudo depth for vertical location in MOM6-DART
+- QCEFF table pretty printer: display-qceff-table
+
+Bug fix:
+
+  - perfect_model_obs progress print info 
+
+**July 16 2025 :: GitHub actions and MOM6 PMO defaults. Tag v11.11.3**
+
+- non-root user for containers
+- run_all_quickbuilds can now use rttov13
+- default PMO options updated for MOM6
+
+**July 7 2025 :: Documentation for Data Management. Tag v11.11.2**
+
+- Document namelist options for state distribution and vertical conversion
+- IEEE flag set for Cray Compiler Environment mkmf.template
+
+**June 6 2025 :: Bug-fix: nc_get_variable_info. Tag v11.11.1**
+
+- nc_get_variable_info: Use local variable rather than optional argument which may not be present
+
+Documentation updates:
+
+   - Fortran compiler and NetCDF requirements
+   - Removed unused .rst files
+   - Comment on damping vs applying posterior inflation clarification
+
+**May 6 2025 :: Fwd-op for SAT_SEAICE radar and laser. Tag v11.11.0**
+
+- Forward Operator for SAT_SEAICE_RADAR|LASER_FREEBOARD. 
+
+  *contributed by Molly Wieringa*
+
+Bug-fix:
+
+  - real128 removed from developer_tests for nvhpc compiler.
+
+Documentation updates:
+
+  - CONAGUA converter documentation updated.
+  - Radar observations documentation updated. 
+
+**May 1 2025 :: Bug-fixes: TIEGCM, BNRH. Tag v11.10.9**
+
+- Fix VTEC extrapolation calculation in TIEGCM model_mod.
+- Fix loop limit in bnrh_distribution_mod, and routine name in error messages.
+- Documentation fix for perturb_single_instance.
+
+**April 22 2025 :: Bug-fix: CICE interpolation. Tag v11.10.8**
+
+- Inverse distance weighting interpolation for CICE. Replaces
+  bilinear interpolation which can produce out-of-bounds values. 
+
+**March 31 2025 :: Bug-fix: CAM perturb. Tag v11.10.7**
+
+- Fix fields to perturb in cam-se and cam-fv.
+- Fix documentation links for obs_selection.
+
+**March 19 2025 :: Calendar base date documentation. Tag v11.10.6**
+
+- Added base date information to time_manager_mod docs.
+- GitHub workflow based on tj-actions changed-files removed.
+
+**March 14 2025 :: WRF use_theta_m check. Tag v11.10.5**
+
+- Assert USE_THETA_M=0 in WRF when initializing wrf model_mod.
+- fixed documentation broken links.
+
+**February 6 2025 :: WRF tutorial and prepbufr documentation. Tag v11.10.4**
+
+- Observation section of WRF tutorial updated to match provided obs.   
+- Prepbufr docs updated to describe complete conversion process.
+
+**February 4 2025 :: Generic model_mod subroutine parse_variables. Tag v11.10.3**
+
+- Creates two generalized subroutines that convert the table of state variables that is
+  read in from the &model_nml to a state_var_type: parse_variables and parse_variables_clamp
+- Alternate versions for this subroutine were replaced with parse_variables in the
+  models MOM6, wrf_hydro, aether_lat-lon, cam-fv, cam-se, POP, and cice
+- New dev test test_parse_variables added
+
+**February 3 2025 :: Inflation documentation. Tag v11.10.2**
+
+- Improved inflation documentation
+- CAM FV and SE checks for required state variables 
+- GitHub action to alert on files with legacy svn info
+- Fwd op documentation formatting fix
+
+**January 30 2025 :: Bug-fix: Explicitly handle BNRHF transform failures. Tag v11.10.1**
+
+- Probit transform failure is caught and an error code is returned 
+- filter_mod and assim_tools_mod skip variables that fail the transform
+
+**January 23 2025 :: DART_LAB QCEFF. Tag v11.10.0**
+
+- Updated DART_LAB to include QCEFF
+- NSF NCAR RDA links updated
+- /glade RDA locations updated
+
+**January 23 2025 :: Pangu-DART. Tag v11.9.0**
+
+- Pangu-Weather ML model DART interface
+
+*contributed by Nuo Chen, University of Oklahoma*
+
+**January 22 2025 :: Bug-fix: Gamma and Beta Distributions. Tag v11.8.9**
+
+Bug fixes:
+
+    - Beta distribution only supporting standard Beta, bounded 0-1.
+    - Gamma distribution only supporting standard, lower bound 0.
+    - Beta and Gamma bounds are forced in the QCEFF table.
+
+Updates:
+
+    - Explicitly setting distribution type, now have UNSET.
+    - Message about failing to converge changed to E_ALLMSG to be visible
+      on all mpi ranks.
+    - remove unused test_obs directory
+
+**January 14 2025 :: Bug-fix MOM6 potential temperature. Tag v11.8.8**
+
+- MOM6 model_interpolate for potential temperature
+- Update lorenz workshop input.nmls to v11
+
+**January 9 2025 :: Bug-fix 1D obs_diag. Tag v11.8.7**
+
+- Added a dummy dimension so 1D obs_diag output can be used with 
+  MATLAB diagnostic tools
+- Added a notification that probit inflation QCEFF options are ignored 
+  for RTPS
+
+**December 6 2024 :: Developer tests. Tag v11.8.6**
+
+- Tests for distribution modules: normal, beta, gamma
+- Removed out-of-date tests for state IO
+
+**November 12 2024 :: MPAS bug-fixes. Tag v11.8.5**
+
+- Fixed 2m and 10m fields not being updated - set istatus for VERTISHEIGHT 
+  and VERTISLEVEL for convert_vert_distrib_state.
+- Fixed vertical location in convert_vertical_obs to use zGridFace.
+
+**November 8 2024 :: POP initial ensemble available from GDEX. Tag v11.8.4**
+
+Documentation update:
+
+  - POP initial ensemble available from GDEX.
+
+Bug-fixes:
+
+  - Removed unnecessary loops around calendar types in time_manager_mod.
+  - Removed unused routine from normal_distribution_mod which case giving compilation warnings.
+  - Replaced broadcast_minmax calls with all_reduce_min_max.
+
+
+**November 7 2024 :: MPI window memory reduction. Tag v11.8.3**
+
+- Removes unnecessary copy of state into mpi window.
+- Removes cray pointer version of the mpi window.
+- | Fortran-testanything included in developer tests. 
+  |  *From dennisdjensen: see developer_tests/contrib/fortran-testanything/LICENSE.txt*
+
+**October 22 2024 :: Bug-fixes: WRF and GOES. Tag v11.8.2**
+
+- Force THM to be the WRF-DART temperature variable
+- Remove offset on GOES observation converter 
+
+**September 27 2024 :: MOM6 mask bug-fix. Tag v11.8.1**
+
+- Fix for MOM6 CESM3 workhorse 2/3 degree grid TL319_t232 to 
+  mask missing geolon|lat|u|v|t values  
+
+**September 10 2024 :: MARBL_column. Tag v11.8.0**
+
+- Interface for MARBL_column for DART: 
+
+   - state estimation
+   - state and parameter estimation
+   - parameter estimation only
+
+- BATS observation converter, and BATS climatology scripting
+
+*contributed by Robin Armstrong*
+
+Bugfix:
+
+- fix for IO for NetCDF files when only some variables have the unlimited dimension  
+
+**August 29 2024 :: Bug fixes for shortest_time_between_assimilations and get_close_init. Tag v11.7.1**
+
+Bug fixes:
+
+   - Prevent hang by erroring out if shortest_time_between_assimilations <=0
+   - Catch and error out if max_dist or max_dist_list is <=0 for 3d sphere 
+     3d cartesian get_close_init
+   - Improved defaults for template  model input.nml
+
+Doc fixes:
+  
+   - Removed out-of-date info about inflation flavor character strings
+   - Remove out-of-date info on qceff branch checkout
+   - GitHub template for reporting documentation issues
+
+
+**August 26 2024 :: KQCEF. Tag v11.7.0**
+
+- Adds a Quantile-Conserving Ensemble Filter Based on Kernel-Density Estimation to DART.
+- New distribution module kde_distribution_mod.
+- New module rootfinding_mod that provides a different implementation of inv_cdf.
+
+*Contributed by Ian Grooms*
+
+**August 15 2024 :: WRF fwd operator bug fixes. Tag v11.6.1**
+
+WRF-DART bug-fixes:
+
+  - Bug fix for surface temperature observations to use QTY_2M_TEMPERATURE
+  - Bug fix for conversion of vapor mixing ratio to specific humidity
+  - Bug fix for diagnostics_obs.csh
+  - Improved documentation for WRF model_mod and WRF-DART Tutorial
+
+**July 26 2024 :: Library build tools for DART. Tag v11.6.0**
+
+- Buildtools for compiling DART as a shared or a static library.
+- Bugfix: correct order of arguments in count_state_ens_copies for 'input'
+  stages_to_write.
+
+**July 11 2024 :: Bgrid documentation and scripting fix. Tag v11.5.1**
+
+- Updated Bgrid documentation and removed outdated scripts and files
+- Fixed obs_diag rank histogram documentation links
+- Improved inflation file documentation
+- GitHub action for running all quickbuilds in DART
+
+**May 16 2024 :: WRF v4. Tag v11.5.0**
+
+- WRF-DART and WRF-DART Tutorial updated to WRFv4. Note, not backwards compatible with WRFv3.9. 
+- local particle filter default value for pf_enkf_hybrid=.false. *contributed by Jon Poterjoy*
+
+**April 23 2024 :: Bug-fix: WRF hybrid vertical coordinate. Tag v11.4.1**
+
+- DART now detects whether WRF is using Hybrid Vertical Coordinate (HVC) introduced in WRFv3.9 or terrain following (TF) system.
+  This fix is also compatible with pre WRFv3.9 versions which did not include explicit attribute information for vertical coordinate system.
+- Improved obs_impact_tool documentation.
+
+**March 27 2024 :: WRF-Hydro Developments; AIRS converter documentation update; Add citation.cff file. Tag v11.4.0**
+
+- WRF-Hydro:
+
+  - Added a new perfect model obs experimental capability to HydroDART
+  - Modified the Streamflow obs converter to allow for better diagnostics: allows DART to
+    compute obs space diagnostics on all gauges from the Routelink
+  - Enhanced performance in the model_mod and noah_hydro_mod when running a full CONUS domain
+  - Improved HydroDART Diagnostics with new capabilities (saves the hydrographs in a high-resolution
+    pdf, handles hybrid DA components, separate plots for the hybrid statistics, allows the openloop
+    to have different ens size and gauges than the DA runs)
+
+- AIRS and AMSU-A observation converters:
+
+  - Updated the documentation to use up-to-date build suggestions for the HDFEOS library
+  - Updated the AIRS converter code to be able to use version 7 of the AIRS data formats
+  - Removed unused and non-functional code: AIRS/BUILD_HDF-EOS.sh, AIRS/L1_AMSUA_to_netcdf.f90,
+    AIRS/shell_scripts/Build_HDF_to_netCDF.sh, AIRS/shell_scripts/Convert_HDF_to_netCDF.csh
+  - Removed the unnecessary entries from obs_def_rttov_nml in the input.nml
+
+- Added a citation.cff file to help users correctly cite DART software - creates a link to cite
+  the repository on the landing page sidebar on GitHub.
+
+**March 13 2024 :: Update WRF-DART scripts and bug template to Derecho; remove no-op routines in ensemble manager. Tag v11.3.1**
+
+- Updated the csh scripting templates used to run WRF-DART and WRF-DART tutorial from Cheyenne to Derecho
+- Updated bug report template to use Derecho instead of Cheyenne
+- Removed the following no-op routines from ensemble manager: prepare_to_write_to_vars, prepare_to_write_to_copies,
+  prepare_to_read_from_vars, prepare_to_read_from_copies, prepare_to_update_vars, prepare_to_update_copies
+
+**March 12 2024 :: MITgcm/N-BLING with Compressed Staggered Grids. Tag v11.3.0**
+
+- The DART-MITgcm code now supports compressed grids, especially suited for areas like 
+  the Red Sea where land occupies more than 90% of the domain.  
+  Built upon work *contributed by Jiachen Liu*.
+- Allows writing the BGC fields into MITgcm's pickup files.
+- Allows different compression for the regular and staggered grids.
+
+**March 12 2024 :: Aether lat-lon. Tag v11.2.0**
+
+- Aether lat-lon interface added to DART.
+
+**March 11 2024 :: SEIR model for infectious diseases. Tag v11.1.0**
+
+- Added SEIR model which simulates the spread of infectious diseases, for example COVID-19.
+
+**February 13 2024 :: Fortran Standards. Tag v11.0.3**
+
+- Replace f2kcli with Fortran intrinsics for command line arguments.
+- AIRS and quikscat mkmf.templates with appropriate HDF, HDFEOS, RTTOV library flags.
+- Simplified noah_hydro_mod.f90 number of non-zero element counts.
+- WRF pert_sounding_module random iseed now integer.
+
+**February 1 2024 :: RTTOV13 cloud bug-fix. Tag v11.0.2**
+
+- Initialize RTTOV13 profile cloud arrays to zero for profiles.
+- Updated docs with RTTOV13 namelist info.
+- New obs_def_rttov13_mod.f90 namelist option wfetch_value.
+- Updated mkmf.templates for RTTOV on Derecho: HDF5 library flags.
+
+GitHub actions changes:
+
+  - checkout action updated to v4.
+
+**January 17 2024 :: CLM bug-fixes. Tag v11.0.1**
+
+- CLM5-DART SourceMods path variable correction
+
+- dart_to_clm:
+
+  - Resolved compiler error by changing the arrays for number of snow layers (snlsno and clm_SNLSNO) to integer types 
+
+  - Forcing h2oliq_po to be slightly larger than zero to be consistent with h2oice_po and dzsno_po
+
+  - Adding checks to ensure that the values for h2oliq_po, h2oice_po, dzsno_po, and snowdp_po are never negative 
+
+**January 11 2024 :: QCEFF. Tag v11.0.0**
+
+Nonlinear and Non-Gaussian Data Assimilation Capabilities in DART
+
+- Adds a Quantile-Conserving Ensemble Filtering Framework (QCEFF) to DART.
+  Publications: `QCEFF part1 <http://n2t.net/ark:/85065/d7mk6hm4>`_,
+  `QCEFF part 2 <http://n2t.net/ark:/85065/d7nv9pbt>`_.  
+
+- The default QCEFF options are EAKF, normal distribution (no bounds).
+
+- User interface changes:
+
+  - filter_kind is now a per-qty option through QCEFF table.
+
+  - Two new required namelists (add to input.nml files):
+
+    - probit_transform_nml
+    - algorithm_info_nml
+
+  - assim_tools_mod namelist:
+  
+    - sort_obs_inc namelist option applied to ENKF only, so default is now .true.
+    - ``spread_restoration`` is not supported in this version
+
+  - algorithm_info_mod QCEFF options read at runtime from .csv or .txt file
+
+
+- New probability distribution modules:
+
+  - beta_distribution_mod *contributed by Chris Riedel*
+  - bnrh_distribution_mod (bounded normal rank histogram)
+  - gamma_distribution_mod
+  - normal_distribution_mod
+
+  -  probit_transform_mod 
+  -  distribution_params_mod
+
+- Update to lorenz_96_tracer_advection:
+
+  - positive_tracer
+  - more tracer namelist options available and changed defaults
+  - updated perturbation routine
+  - bug-fix: real(r8) rather than real(i8)
+
+- Fix: obs_def_1d_state_mod (oned forward operators):
+
+  -  For non-integer powers, fix up values for negative bases
+
+- Documentation:
+
+  - main page section on Nonlinear and Non-Gaussian Data Assimilation Capabilities in DART
+  - QCEFF instructions: Quantile-Conserving Ensemble Filter Framework
+  - Example to work through: QCEFF: Examples with the Lorenz 96 Tracer Model
+
+**January 9 2024 :: Derecho CLM-DART. Tag v10.10.1**
+
+- CLM-DART scripting updated for Derecho.
+- CLM-DART SourceMods packaged with DART.
+- Reinstituted both 'complete' and 'single_year' datm streamlist files in shell scripts
+  due to delays when initializing the CAM reanalysis files through campaign/collections directory.
+
+bug-fixes:
+
+- Fixed format statement in assert_mod to conform to Fortran standards.
+- Fixed debugging output for failed forward operators.
+
+doc-fixes:
+
+- Remove broken link for register for dart.
+
+**December 13 2023 :: Developer tests and bug fixes. Tag v10.10.0** 
+
+- new developer tests to run all builds for all compilers on NSF NCAR machine
+  Derecho.
+- removed redundant nc_check routine from utilities_mod in favor of 
+  netcdf_utilities_mod::nc_check
+- Improved default thinning options for AIRS L2 converter.
+
+bug-fixes:
+
+- AIRS L2 converter message prints correct number of obs.
+- MOM6 model_mod .eqv. used for logical comparison to conform to Fortran standard.
+
+**December 1 2023 :: Bringing DART documentation in accordance with NSF Policy. Tag v10.9.2**
+
+- doc-fixes:
+
+  - Brings DART documentation in accordance with the November 2023,
+    "Official Policy on Brand Standards of the U.S. National Science
+    Foundation." Changes instances of "NCAR" to "NSF NCAR" and adds
+    NSF logo to the DART logo in the navigation menu.
+
+**November 9 2023 :: Github Actions MPIf08 Check. Tag v10.9.1**
+
+- Adds a new check to the Github Actions workflow that uses the
+  mpif08 module (compiles with ./quickbuild mpif08 and runs
+  filter on 2 mpi tasks with the lorenz_96 model).
+
+**November 7 2023 :: MPI f08 quickbuild option. Tag v10.9.0**
+
+- quickbuild.sh mpif08 option to build using the mpi_f08 module
+- nvhpc mkmf.template for use on Derecho
+
+bug-fixes:
+
+- filter_mod.dopperlerfold in sync with filter_mod
+- unnecessary loop removed from Mersenne twister developer test 
+
+doc-fixes:
+
+- rename assim_model_mod.rst to match the module
+- fix various Sphinx warnings and broken link 
+
+**November 2 2023 :: QCEFF Input Table. Tag v11.1.0-alpha**
+
+- The QCEFF input table allows for the specification of QCEFF/probit
+  input options, per QTY, at runtime.
+- This replaces the functionality of using an algorithm_info_mod specific
+  to the model, which meant editing algorithm_info_mod.f90 to specify
+  which distribution should be used for which quantity.
+- The algorithm_info_mod files for the lorenz_96_tracer_advection model
+  examples have been replaced with set QCF tables (all_bnrhf_qcf_table.csv,
+  all_eakf_qcf_table.csv, state_eakf_tracer_bnrhf_qcf_table.csv,
+  neg_qcf_table.csv) and can be found in lorenz_96_tracer_advection/work.
+- Removed the ‘global’ version of filter_kind from assim_tools_mod.f90
+  and the &assim_tools_nml
+
+**October 5 2023 :: WRF-DART tutorial diagnostic section. Tag v10.8.5**
+
+- Improvements:
+
+  - Added a more complete diagnostics section to the WRF-DART Tutorial.
+  - Developer test for Mersenne twister random number generator.
+
+- Bug-fix: 
+
+  - 1D location subsetting fixed for obs_sequence_tool.  
+
+   *contributed by Henry Santer*
+
+
+**September 18 2023 :: Fluxnet observation converter and obs_def_rttov13_mod.f90 bug-fixes. Tag v10.8.4**
+
+Fluxnet obs converter:
+
+- Generates a new observation converter (Fluxnetfull_to_obs) for eddy 
+  covariance flux tower data (carbon, water energy fluxes)
+- Documentation changes made to the older, deprecated ameriflux 
+  converter (level4_to_obs) and the broken links have been fixed
+- New flux tower observation types added to accomodate the forward 
+  operator approach for time aggregated fluxes (daily through monthly)
+
+obs_def_rttov13_mod.f90 bug-fixes:
+
+- Added public get_channel to obs_def_rttov13_mod.f90 to compile WRF 
+  successfully with rttov13.
+- Removed cloud_overlap (integer) from the function: get_rttov_option_logical
+
+**August 21 2023 :: CAM-FV shell scripts. Tag v10.8.3**
+
+Performance improvements for CAM-FV shell scripts:
+
+- Avoid listing files if the CAM_PHIS file already exists.
+- Avoid using /var/tmp
+- RUNDIR defined after CIME_OUTPUT_ROOT change.
+- Warn if no inflation files found.
+
+**August 8 2023 :: MPAS-ATM constants and readthedocs fix. Tag v10.8.2**
+
+- MPAS-ATM constants updated to MPAS v5+
+- readthedocs build info updated.
+
+
+**July 27 2023 :: Bug-fixes for MOM6 and WRF. Tag v10.8.1**
+
+- bug-fixes:
+
+  - MOM6 read_model_time converts to dart time to match observation sequences.
+  - MOM6 salinity units converted to MSU during model_interpolate.
+  - WRF get_dist calculation fixed for observations with VERTISUNDEF.
+
+- doc-fixes:
+
+  - WOD and GTSPP converter documentation notes about salinity units.
+  - MOM6 documentation for setting the Gregorian calendar in CESM.
+  - comment fix in filter_mod.f90
+
+
+**June 27 2023 :: CAM-DART observation preprocessor. Tag v10.8.0**
+
+- Tool to remove observations above a given CAM level from an obs sequence file
+- bug-fixes:
+
+  -  MOM6 added check for too deep observations
+  -  test_interpolate_range write format corrected
+  -  removed unused code from mpas_atm directory
+- doc: removed outdated references to prep_buf.html
+
+**June 1 2023 :: Smoother removal. Tag v10.7.3**
+
+- Dead smoother code removed.
+- Documentation fix for quality control.
+- Cray Compiler Environment mkmf.template 
+
 **May 10 2023 :: Doc-fix. Tag v10.7.2**
  
 - conf.py changes for latest readthedocs. Fixes search and flyout menu.

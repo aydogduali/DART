@@ -9,6 +9,48 @@ Instructions for using MOM6 in CESM are available on the `MOM_interface GitHub W
 
 This DART-MOM6 interface was developed for `MOM6 <https://github.com/NCAR/MOM6>`_ within the CESM framework.
 
+MOM6 time
+---------
+
+The default in CESM is to run with no leap years.
+To assimilate real observations, we need to switch to the Gregorian 
+calendar to account for leap years.
+
+.. code-block:: text
+
+    ./xmlchange CALENDAR=GREGORIAN
+
+To illustrate what happens if you do not set CALENDAR=GREGORIAN, here is
+an example where the RUN_STARTDATE is set to 2015-02-01 and MOM6 is run for 10 days.
+
+.. code-block:: text
+
+    ./xmlchange RUN_STARTDATE=2015-02-01
+
+The MOM6 restart file has the following meta data, where Time is days from year 1.
+
+.. code-block:: text
+
+    double Time(Time) ;
+                    Time:long_name = "Time" ;
+                    Time:units = "days" ;
+                    Time:axis = "T" ;
+    ...
+    // global attributes:
+    		:filename = "./c.T62_g16.ens3.mom6.r.2015-02-11-00000._0001.nc" ;
+    data:
+    
+     Time = 735151 ;
+    }
+
+
+The absence of leap years gives you inconsistent time information when comparing 
+to observation times in YYYY-MM-DD:
+
+- Restart filename has the time 2015-02-11-00000.
+- The Time variable is Time = 735151 days, which is 2013/10/11
+
+
 MOM6 checksum of restart files
 ------------------------------
 
@@ -32,14 +74,16 @@ The namelist options for DART-MOM6 are as follows:
     &model_nml
        template_file = 'mom6.r.nc',
        ocean_geometry = 'ocean_geometry.nc',
-       static_file = 'c.e22.GMOM.T62_g16.nuopc.001.mom6.static.nc',
-       model_state_variables        = 'Salt ', 'QTY_SALINITY             ', 'UPDATE',
-                                      'Temp ', 'QTY_POTENTIAL_TEMPERATURE', 'UPDATE',
-                                      'u    ', 'QTY_U_CURRENT_COMPONENT  ', 'UPDATE',
-                                      'v    ', 'QTY_V_CURRENT_COMPONENT  ', 'UPDATE',
-                                      'h    ', 'QTY_LAYER_THICKNESS      ', 'UPDATE',
+       static_file = 'static.nc',
+       model_state_variables        = 'Salt ', 'QTY_SALINITY             ', 'NA', 'NA', 'UPDATE',
+                                      'Temp ', 'QTY_POTENTIAL_TEMPERATURE', 'NA', 'NA', 'UPDATE',
+                                      'u    ', 'QTY_U_CURRENT_COMPONENT  ', 'NA', 'NA', 'UPDATE',
+                                      'v    ', 'QTY_V_CURRENT_COMPONENT  ', 'NA', 'NA', 'UPDATE',
+                                      'h    ', 'QTY_LAYER_THICKNESS      ', 'NA', 'NA', 'UPDATE',
        assimilation_period_days     = 1
-       assimilation_period_seconds  = 1
+       assimilation_period_seconds  = 0
+       use_pseudo_depth = .false. ! use pseudo depth instead of sum(layer thickness) for vertical location
+       layer_name = 'Layer' ! name of the layer variable in the restart file
        /
 
 * ``template_file`` is a MOM6 restart file. The size and shape of the state variables will be read from this netCDF file.
@@ -60,6 +104,15 @@ The namelist options for DART-MOM6 are as follows:
          geolat_v(:,:) Latitude of meridional velocity (Cv) point
 
 
+* ``model_state_variables`` defines the list of model variables from the MOM6 restart file that will be included in the DART state. Each row in the table should have the following fields:
+
+    - **NetCDF variable name**: Name of the variable in the MOM6 restart file (e.g., 'Salt').
+    - **DART Quantity**: The DART quantity associated with the variable (e.g., 'QTY_SALINITY').
+    - **Clamping lower bound**: Minimum allowed value for the variable when writing out restarts (use 'NA' for no bound).
+    - **Clamping upper bound**: Maximum allowed value for the variable when writing out restarts (use 'NA' for no bound).
+    - **UPDATE or NO_COPY_BACK**: Use 'UPDATE' to allow DART to update this variable during assimilation, or 'NO_COPY_BACK' to prevent updates (variable will be read but not written back).
+
+
 Vertical Coordinate
 -------------------
 
@@ -77,6 +130,8 @@ To get the depth in meters at a particular layer, you must sum the layer thickne
    Layer interface thickness maybe available from MOM6. But the restarts we have
    available have "Layer thickness" only.
 
+The namelist option ``use_pseudo_depth`` can be set to `.true.` to use the pseudo depth
+instead of the sum of layer thicknesses for the vertical location.
 
 Land in the state
 ------------------
@@ -92,23 +147,4 @@ The process to identify points below the sea floor requires the vertical locatio
 point in meters. The conversion from model layer to depth in meters is done in
 ``convert_vertical_state``. The depth is then used to identify points below the
 basin depth in ``get_close_state``.
-
-
-.. code-block:: fortran
-   :emphasize-lines: 5, 9
-   :caption: snippet from get_close_state
-
-    ! Put any land or sea floor points very far away
-    ! so they are not updated by assimilation
-    do ii = 1, num_close
-    
-      if(loc_qtys(close_ind(ii)) == QTY_DRY_LAND) dist = 1.0e9_r8
-    
-      lon_lat_vert = get_location(locs(close_ind(ii))) ! assuming VERTISHEIGHT
-      call get_model_variable_indices(loc_indx(ii), i, j, k)
-      if ( below_sea_floor(i,j,lon_lat_vert(3)) ) dist = 1.0e9_r8
-    
-    enddo
-
-
 

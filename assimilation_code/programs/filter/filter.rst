@@ -6,7 +6,7 @@ Overview
 
 Main program for driving ensemble filter assimilations.
 
-``filter`` is a Fortran 90 program, and provides a large number of options for controlling execution behavior and
+``filter`` is a Fortran program, and provides a large number of options for controlling execution behavior and
 parameter configuration that are driven from its namelist. See the namelist section below for more details. The number
 of assimilation steps to be done is controlled by the input observation sequence and by the time-stepping capabilities
 of the model being used in the assimilation.
@@ -23,7 +23,7 @@ This overview includes these subsections:
 -  Description of Inflation Options
 -  Detailed Program Flow
 
-See :doc:`../../../README` for more documentation, including a discussion of the
+See :ref:`Welcome page` for more documentation, including a discussion of the
 capabilities of the assimilation system, a diagram of the entire execution cycle, the options and features.
 
 Program flow
@@ -83,16 +83,10 @@ DART is distributed as a toolkit/library/facility that can be used as-is with th
 is also designed so that users can add new models, new observation types and forward operators, and new assimilation
 algorithms.
 
-The locations in the DART `code tree <../../../docs/index.html#Directories>`__ which are intended to be modified by
-users are:
+The locations in the DART code tree which are intended to be modified by users are:
 
 New Models
-   Add a new directory in the ``models`` subdirectory. Copy (recursively, e.g. ``cp -r``) the contents of the
-   ``template`` directory and modify from there. Note that the ``model_mod.f90`` file in the template dir is appropriate
-   for small models; for large geophysical models see the ``full_model_mod.f90`` file and also examine other model
-   directories for ideas. See additional documentation in the :doc:`../../../models/template/readme` documentation,
-   and the `DART web pages <http://www.image.ucar.edu/DAReS/DART/DART2_Documentation.php#adding_a_model>`__ on adding
-   new models.
+ To add a new model to DART see :ref:`Porting new models`.
 New Observation Platforms
    To convert observations from other formats to DART format, add a new directory in the ``observations/obs_converters``
    subdirectory and populate it with converter code.
