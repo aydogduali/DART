@@ -127,7 +127,7 @@ use netcdf
 
     integer :: domain_id ! global variable for state_structure_mod routines
     integer :: nav_lon_x, nav_lat_y, nav_lev_z, time_t
-    real(r8), allocatable, target :: nav_lon(:,:), nav_lat(:,:), deptht(:)
+    real(r8), allocatable, target :: nav_lon(:,:), nav_lat(:,:), nav_lev(:)
     character(len=512) :: string1, string2, string3
 
     character(len=32 ), parameter :: revision = "$Revision$"
@@ -273,8 +273,8 @@ use netcdf
     elseif (is_vertical(location,"LEVEL")) then
        ! convert the level index to an actual depth
        ind = nint(loc_array(3))
-       if ( (ind < 1) .or. (ind > size(deptht)) ) then
-          lheight = deptht(ind)
+       if ( (ind < 1) .or. (ind > size(nav_lev)) ) then
+          lheight = nav_lev(ind)
        else
           istatus = 1
           return
@@ -301,7 +301,7 @@ use netcdf
     endif
 
     ! Get the bounding vertical levels and the fraction between bottom and top
-    call height_bounds(lheight, nav_lev_z, deptht, hgt_bot, hgt_top, hgt_fract, hstatus)
+    call height_bounds(lheight, nav_lev_z, nav_lev, hgt_bot, hgt_top, hgt_fract, hstatus)
     if(hstatus /= 0) then
        istatus = 4
        return
@@ -416,7 +416,7 @@ if ( .not. module_initialized ) call static_init_model
 ! Succesful istatus is 0
 istatus = 0
 
-! The deptht array contains the depths of the center of the vertical grid boxes
+! The nav_lev array contains the depths of the center of the vertical grid boxes
 
 ! It is assumed that the top box is shallow and any observations shallower
 ! than the depth of this boxes center are just given the value of the
@@ -755,7 +755,7 @@ end function get_val
          call error_handler(E_ERR,'get_state_meta_data',string1,source,revision,revdate)
     endif
 
-    location = set_location(nav_lon(iloc, 1), nav_lat(1, jloc), deptht(vloc), VERTISHEIGHT)
+    location = set_location(nav_lon(iloc, 1), nav_lat(1, jloc), nav_lev(vloc), VERTISHEIGHT)
 
     if (present(qty)) then
        qty = myqty
@@ -783,7 +783,7 @@ end function get_val
 
     nav_lon_x   = get_dimension_length(ncid, 'x',   filename)
     nav_lat_y   = get_dimension_length(ncid, 'y',   filename)
-    nav_lev_z   = get_dimension_length(ncid, 'deptht',   filename)
+    nav_lev_z   = get_dimension_length(ncid, 'nav_lev',   filename)
     time_t      = get_dimension_length(ncid, 'time_counter',   filename)
 
     print*, 'grid_dims, x, y, z, t: ', nav_lon_x, nav_lat_y, nav_lev_z, time_t
@@ -816,13 +816,13 @@ end function get_val
     call nc_check(nf90_get_var( ncid, VarID, nav_lat), &
         'get_grid', 'get_var nav_lat '//trim(filename))
 
-    if (.not. allocated(deptht)) allocate(deptht(nav_lev_z))
+    if (.not. allocated(nav_lev)) allocate(nav_lev(nav_lev_z))
 
-    call nc_check(nf90_inq_varid(ncid, 'deptht', VarID), &
-        'get_grid', 'inq_varid deptht'//trim(filename))
+    call nc_check(nf90_inq_varid(ncid, 'nav_lev', VarID), &
+        'get_grid', 'inq_varid nav_lev'//trim(filename))
 
-    call nc_check(nf90_get_var( ncid, VarID, deptht), &
-        'get_grid', 'get_var deptht '//trim(filename))
+    call nc_check(nf90_get_var( ncid, VarID, nav_lev), &
+        'get_grid', 'get_var nav_lev '//trim(filename))
 
     ! nemo example file has longitude < 0
     ! DART uses [0,360]
@@ -967,7 +967,7 @@ end function get_val
                 ! supported - do nothing
              case ('y')
                 ! supported - do nothing
-             case ('deptht')
+             case ('nav_lev')
                 ! supported - do nothing
              case ('axis_nbounds')
                 ! supported - do nothing
@@ -1063,7 +1063,7 @@ subroutine end_model()
 
 	if (allocated(nav_lon)) deallocate(nav_lon)
 	if (allocated(nav_lat)) deallocate(nav_lat)
-	if (allocated(deptht))  deallocate(deptht)
+	if (allocated(nav_lev)) deallocate(nav_lev)
 
 
 end subroutine end_model
